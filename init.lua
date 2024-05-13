@@ -143,14 +143,14 @@ local function GUI_Main()
 	if checkDialog() then
 		if hasDialog then
 			ImGui.Text(string.format("%s's Dialog", target))
-			ImGui.SameLine(ImGui.GetWindowContentRegionWidth() - 10)
-			ImGui.Text(hIcon)
-			if ImGui.IsItemHovered() then
-				if ImGui.IsMouseReleased(0) then
-				ShowDialog = false
-				Running = false
-				end
-			end
+			-- ImGui.SameLine(ImGui.GetWindowContentRegionWidth() - 10)
+			-- ImGui.Text(hIcon)
+			-- if ImGui.IsItemHovered() then
+			-- 	if ImGui.IsMouseReleased(0) then
+			-- 	ShowDialog = false
+			-- 	Running = false
+			-- 	end
+			-- end
 			-- Function to merge dialogues and handle Dialog display
 			local function handleCombinedDialog()
 				local allZonesTable = Dialog[serverName][target]['allzones'] or {}
@@ -189,12 +189,12 @@ local function GUI_Main()
 					
 					if _G["cmdString"] and _G["cmdString"] ~= '' then
 						ImGui.Separator()
-						if ImGui.Button('Say ' .. tmpName .. '##DialogDBCombined') then
+						if ImGui.Button('Say ##DialogDBCombined') then
 							mq.cmdf("/say %s", _G["cmdString"])
 						end
 						ImGui.SameLine()
-						if ImGui.Button('Group Say ' .. tmpName .. '##DialogDBCombined') then
-							mq.cmdf("/dgae /say %s", _G["cmdString"])
+						if ImGui.Button('Group Say ##DialogDBCombined') then
+							mq.cmdf("/multiline ; /dgza /target %s; /timed 10, /dgza /say %s",target, _G["cmdString"])
 						end
 					end
 				end
@@ -210,6 +210,7 @@ local function GUI_Main()
 end
 
 local function init()
+	if mq.TLO.MacroQuest.BuildName() ~= 'Emu' then serverName = 'Live' end -- really only care about server name for EMU as the dialogs may vary from serever to server to server
 	if not File_Exists(dialogData) then
 		mq.pickle(dialogData, Dialog)
 	else
