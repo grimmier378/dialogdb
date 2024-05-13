@@ -13,9 +13,11 @@ Zone checks for either Current Zone name or 'allzones'
 
 # NPC Dialog DB Commands
 ## Current Zone:
-/dialogdb add ["description"] ["command"] Adds to Current Zone description and command
-/dialogdb add ["Value"] Adds to Current Zone description and command = Value 
+```/dialogdb add ["description"] ["command"] Adds to Current Zone description and command```
 
-##NPC Dialog DB All Zones:
-/dialogdb addall ["description"] ["command"] Adds to All Zones description and command
-/dialogdb addall ["Value"] Adds to All Zones description and command = Value
+```/dialogdb add ["Value"] Adds to Current Zone description and command = Value ```
+
+## NPC Dialog DB All Zones:
+```/dialogdb addall ["description"] ["command"] Adds to All Zones description and command```
+
+```/dialogdb addall ["Value"] Adds to All Zones description and command = Value```
