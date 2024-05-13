@@ -12,6 +12,7 @@ local tmpName = ''
 local target = mq.TLO.Target.DisplayName() or 'None'
 local dialogData = mq.configDir ..'/npc_dialog.lua'
 local winFlags = bit32.bor(ImGuiWindowFlags.NoCollapse, ImGuiWindowFlags.NoTitleBar, ImGuiWindowFlags.AlwaysAutoResize)
+local delay = 1
 
 ---comment Check to see if the file we want to work on exists.
 ---@param name string -- Full Path to file
@@ -143,14 +144,7 @@ local function GUI_Main()
 	if checkDialog() then
 		if hasDialog then
 			ImGui.Text(string.format("%s's Dialog", target))
-			-- ImGui.SameLine(ImGui.GetWindowContentRegionWidth() - 10)
-			-- ImGui.Text(hIcon)
-			-- if ImGui.IsItemHovered() then
-			-- 	if ImGui.IsMouseReleased(0) then
-			-- 	ShowDialog = false
-			-- 	Running = false
-			-- 	end
-			-- end
+
 			-- Function to merge dialogues and handle Dialog display
 			local function handleCombinedDialog()
 				local allZonesTable = Dialog[serverName][target]['allzones'] or {}
@@ -194,7 +188,24 @@ local function GUI_Main()
 						end
 						ImGui.SameLine()
 						if ImGui.Button('Group Say ##DialogDBCombined') then
-							mq.cmdf("/multiline ; /dgza /target %s; /timed 10, /dgza /say %s",target, _G["cmdString"])
+							local cDelay = delay * 10
+							for i = 1, mq.TLO.Me.GroupSize() - 1 do
+								local pName = mq.TLO.Group.Member(i).DisplayName()
+								mq.cmdf("/multiline ; /dex %s /target %s; /dex %s /timed %s, /say %s",pName, target,pName ,cDelay, _G["cmdString"])
+								printf("/multiline ; /dex %s /target %s; /dex %s /timed %s, /say %s",pName, target,pName ,cDelay, _G["cmdString"])
+								cDelay = cDelay + (delay * 10)
+
+							end
+							mq.cmdf("/timed %s, /say %s",cDelay, _G["cmdString"])
+							printf("/timed %s, /say %s",cDelay, _G["cmdString"])
+
+						end
+						ImGui.SameLine()
+						local tmpDelay = delay
+						ImGui.SetNextItemWidth(75)
+						tmpDelay = ImGui.InputInt("Delay##DialogDBCombined", tmpDelay, 1, 1)
+						if tmpDelay ~= delay then
+							delay = tmpDelay
 						end
 					end
 				end
