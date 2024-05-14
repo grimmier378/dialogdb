@@ -182,67 +182,123 @@ local function handleCombinedDialog()
 	return combinedTable
 end
 
-local function EditGUI(server,target,zone,desc,cmd)
+local entries = {}
+
+local function EditGUI(server, target, zone, desc, cmd)
+	if #entries == 0 then
+		table.insert(entries, {desc = desc, cmd = cmd})
+	end
 
 	ImGui.Text("Edit Dialog")
 	ImGui.Separator()
-	ImGui.Text("Server: %s",server)
-	ImGui.Text("Target: %s",target)
-	ImGui.Text("Zone: %s",zone)
+	ImGui.Text(string.format("Target: %s", target))
+	ImGui.Text(string.format("Zone: %s", zone))
 	ImGui.SameLine()
-	local aZones = false
-	if zone == 'allzones' then aZones = true end
-	aZones, _ = ImGui.Checkbox("All Zones##EditDialogAllZones", zone == 'allzones')
-		if aZones then
-			eZone = 'allzones'
-			zone= 'allzones'
-		else
-			eZone = curZone
-			zone = curZone
-		end
-	ImGui.Text("Description: %s",eDes)
-	ImGui.Text("Command: %s",eCmd)
+
+	local aZones = (zone == 'allzones')
+	aZones, _ = ImGui.Checkbox("All Zones##EditDialogAllZones", aZones)
+	local eZone = aZones and 'allzones' or curZone
+
 	ImGui.Separator()
-	ImGui.Text("New Description:")
-	ImGui.SameLine()
-	
-	newDesc, _ = ImGui.InputText("##EditDialogDesc", newDesc)
-	if desc ~= newDesc then
-		desc = newDesc
-	end
-	ImGui.Text("New Command:")
-	ImGui.SameLine()
-	
-	newCmd, _ = ImGui.InputText("##EditDialogCmd", newCmd)
-	if newCmd ~= cmd then
-		cmd = newCmd
-	end
-	ImGui.Separator()
-	if ImGui.Button("Save##EditDialogSave") then
-		if Dialog[server][target] == nil then
-			Dialog[server][target] = {}
+	ImGui.Text("Description:")
+	ImGui.SameLine(160)
+	ImGui.Text("Command:")
+	for i, entry in ipairs(entries) do
+
+		ImGui.SetNextItemWidth(150)
+		entry.desc, _ = ImGui.InputText("##EditDialogDesc" .. i, entry.desc)
+		ImGui.SameLine()
+		ImGui.SetNextItemWidth(150)
+		entry.cmd, _ = ImGui.InputText("##EditDialogCmd" .. i, entry.cmd)
+		ImGui.SameLine()
+		if ImGui.Button("Remove##" .. i) then
+			table.remove(entries, i)
 		end
-		if eZone == 'allzones' then
-			if Dialog[server][target]['allzones'] == nil then
-				Dialog[server][target]['allzones'] = {}
+
+		ImGui.Separator()
+	end
+
+	if ImGui.Button("Add Row##AddRowButton") then
+		table.insert(entries, {desc = "NEW", cmd = "NEW"})
+	end
+	ImGui.SameLine()
+	if ImGui.Button("Save All##SaveAllButton") then
+		for _, entry in ipairs(entries) do
+			if entry.desc ~= "" and entry.desc ~= "NEW" then
+				Dialog[server][target] = Dialog[server][target] or {}
+				Dialog[server][target][eZone] = Dialog[server][target][eZone] or {}
+				Dialog[server][target][eZone][entry.desc] = entry.cmd
 			end
-			Dialog[server][target]['allzones'][eDes] = nil
-			Dialog[server][target]['allzones'][newDesc] = cmd
-		else
-			if Dialog[server][target][zone] == nil then
-				Dialog[server][target][zone] = {}
-			end
-			Dialog[server][target][zone][eDes] = nil
-			Dialog[server][target][zone][newDesc] = cmd
 		end
 		mq.pickle(dialogData, Dialog)
 		editGUI = false
 	end
+
 	ImGui.SameLine()
 	if ImGui.Button("Cancel##EditDialogCancel") then
 		editGUI = false
 	end
 end
+
+
+-- local function EditGUI(server,target,zone,desc,cmd)
+
+-- 	ImGui.Text("Edit Dialog")
+-- 	ImGui.Separator()
+-- 	ImGui.Text("Target: %s",target)
+-- 	ImGui.Text("Zone: %s",zone)
+-- 	ImGui.SameLine()
+-- 	local aZones = false
+-- 	if zone == 'allzones' then aZones = true end
+-- 	aZones, _ = ImGui.Checkbox("All Zones##EditDialogAllZones", zone == 'allzones')
+-- 		if aZones then
+-- 			eZone = 'allzones'
+-- 			zone= 'allzones'
+-- 		else
+-- 			eZone = curZone
+-- 			zone = curZone
+-- 		end
+-- 	ImGui.Separator()
+-- 	ImGui.Text("Description:")
+-- 	ImGui.SameLine()
+	
+-- 	newDesc, _ = ImGui.InputText("##EditDialogDesc", newDesc)
+-- 	if desc ~= newDesc then
+-- 		desc = newDesc
+-- 	end
+-- 	ImGui.Text("Command:")
+-- 	ImGui.SameLine()
+	
+-- 	newCmd, _ = ImGui.InputText("##EditDialogCmd", newCmd)
+-- 	if newCmd ~= cmd then
+-- 		cmd = newCmd
+-- 	end
+-- 	ImGui.Separator()
+-- 	if ImGui.Button("Save##EditDialogSave") then
+-- 		if Dialog[server][target] == nil then
+-- 			Dialog[server][target] = {}
+-- 		end
+-- 		if eZone == 'allzones' then
+-- 			if Dialog[server][target]['allzones'] == nil then
+-- 				Dialog[server][target]['allzones'] = {}
+-- 			end
+-- 			Dialog[server][target]['allzones'][eDes] = nil
+-- 			Dialog[server][target]['allzones'][newDesc] = cmd
+-- 		else
+-- 			if Dialog[server][target][zone] == nil then
+-- 				Dialog[server][target][zone] = {}
+-- 			end
+-- 			Dialog[server][target][zone][eDes] = nil
+-- 			Dialog[server][target][zone][newDesc] = cmd
+-- 		end
+-- 		mq.pickle(dialogData, Dialog)
+-- 		editGUI = false
+-- 	end
+-- 	ImGui.SameLine()
+-- 	if ImGui.Button("Cancel##EditDialogCancel") then
+-- 		editGUI = false
+-- 	end
+-- end
 
 -- local tmpName = tmpDesc or ''
 local function GUI_Main()
