@@ -379,14 +379,12 @@ local function GUI_Main()
 			mq.pickle(dialogConfig, Config)
 		end
 		ImGui.EndTable()
-		
-		
+		ImGui.Separator()
 		--- Dialog Config Table
-
 		if tmpTarget ~= nil and tmpTarget ~= 'None' then
 			local sizeX, sizeY = ImGui.GetContentRegionAvail()
 			ImGui.BeginChild("DialogConfigChild", sizeX,sizeY -30,bit32.bor(ImGuiChildFlags.Border, ImGuiChildFlags.AutoResizeY))
-			ImGui.SeparatorText("NPC Dialog's")
+			ImGui.SeparatorText(tmpTarget.."'s Dialogs")
 			ImGui.BeginTable("NPC Dialogs##DialogConfigTable2", 5, ImGuiTableFlags.Borders)
 			ImGui.TableSetupScrollFreeze(0, 1)
 			ImGui.TableSetupColumn("NPC##DialogDB_Config", ImGuiTableColumnFlags.WidthFixed, 100)
@@ -418,7 +416,6 @@ local function GUI_Main()
 						end
 						ImGui.SameLine()
 						if ImGui.Button("Edit##DialogDB_Config_Edit_"..id) then
-							-- Dialog[serverName][tmpTarget][z][d] = nil
 							eZone = z
 							eTar = tmpTarget
 							eDes = d
@@ -426,9 +423,6 @@ local function GUI_Main()
 							newCmd = c
 							newDesc = d
 							editGUI = true
-
-							-- printf("Editing: %s %s %s %s",tmpTarget,z,d,c)
-							-- mq.pickle(dialogData, Dialog)
 						end
 						id = id + 1
 					end
@@ -442,7 +436,7 @@ local function GUI_Main()
 			end
 			ImGui.EndChild()
 		end
-		
+
 		if ImGui.Button("Add Dialog##DialogConfig") then
 			if Dialog[serverName][tmpTarget] == nil then
 				Dialog[serverName][tmpTarget] = {allzones = {}, [curZone] = {}}
