@@ -13,6 +13,7 @@ local cmdZone = '/dgza /say'
 local cmdChar = '/dex'
 local cmdSelf = '/say'
 local tmpDesc = ''
+local DEBUG = false
 local tmpTarget = 'None'
 local eZone, eTar, eDes, eCmd, newCmd, newDesc = '', '', '', '', '', ''
 local CurrTarget = mq.TLO.Target.DisplayName() or 'None'
@@ -46,8 +47,9 @@ local function printHelp()
 	printf("%s\ay/dialogdb addall \aw[\at\"description\"\aw] [\at\"command\"\aw] \aoAdds to All Zones description and command",msgPref)
 	printf("%s\ay/dialogdb addall \aw[\at\"Value\"\aw] \aoAdds to All Zones description and command = Value ",msgPref)
 	printf("%s\agNPC Dialog DB \aoCommon:",msgPref)
-	printf("%s\ay/dialogdb \aoDisplay Help",msgPref)
+	printf("%s\ay/dialogdb help \aoDisplay Help",msgPref)
 	printf("%s\ay/dialogdb config \aoDisplay Config Window",msgPref)
+	printf("%s\ay/dialogdb debug \aoToggles Debugging, Turns off Commands and Prints them out so you can verify them",msgPref)
 	
 end	
 
@@ -86,12 +88,25 @@ local function bind(...)
 	local valueChanged = false
 	if #args == 1 then
 		if args[1] == 'config' then
-			ConfUI = true
+			ConfUI = not ConfUI
+			return
+		elseif args[1] == 'debug' then
+			DEBUG = not DEBUG
+			local msgPref = string.format("\aw[\at%s\aw] ",mq.TLO.Time.Time24())
+			if DEBUG then
+				printf("%s \ayDEBUGGING \agEnabled \ayALL COMMANDS WILL BE PRINTED TO CONSOLE",msgPref)
+			else
+				printf("%s \ayDEBUGGING \arDisabled \ayALL COMMANDS WILL BE EXECUTED",msgPref)
+			end
+			return
+		elseif args[1] == 'help' then
+			printHelp()
+			return
+		else
+			printHelp()
+			print("No String Supplied try again~")
 			return
 		end
-		printHelp()
-		print("No String Supplied try again~")
-		return
 	end
 	local name = mq.TLO.Target.DisplayName() or 'None'
 	if key ~= nil then
@@ -272,13 +287,20 @@ local function GUI_Main()
 				if _G["cmdString"] and _G["cmdString"] ~= '' then
 					ImGui.Separator()
 					if ImGui.Button('Say ##DialogDBCombined') then
-						mq.cmdf("%s %s", cmdSelf, _G["cmdString"])
-					end
+						if not DEBUG then
+							mq.cmdf("%s %s", cmdSelf, _G["cmdString"])
+						else
+							 printf("%s %s", cmdSelf, _G["cmdString"])
+						end
+											end
 					if mq.TLO.Me.GroupSize() > 1 then
 						ImGui.SameLine()
 						if ImGui.Button('Group Say ##DialogDBCombined') then
-							mq.cmdf("/multiline ; %s /target %s; /timed 5, %s %s %s",cmdGroup, CurrTarget,cmdGroup,cmdSelf,_G["cmdString"])
-							-- printf("/multiline ; %s /target %s; /timed 5, %s %s %s",cmdGroup, CurrTarget,cmdGroup,cmdSelf,_G["cmdString"])
+							if not DEBUG then
+								mq.cmdf("/multiline ; %s /target %s; /timed 5, %s %s %s",cmdGroup, CurrTarget,cmdGroup,cmdSelf,_G["cmdString"])
+							else
+								 printf("/multiline ; %s /target %s; /timed 5, %s %s %s",cmdGroup, CurrTarget,cmdGroup,cmdSelf,_G["cmdString"])
+							end
 						end
 						ImGui.SameLine()
 						local tmpDelay = delay
@@ -291,17 +313,26 @@ local function GUI_Main()
 							local cDelay = delay * 10
 							for i = 1, mq.TLO.Me.GroupSize() - 1 do
 								local pName = mq.TLO.Group.Member(i).DisplayName()
-								mq.cmdf("/multiline ; %s %s /target %s; %s %s /timed %s, %s %s",cmdChar,pName, CurrTarget,cmdChar,pName ,cDelay, cmdSelf, _G["cmdString"])
-								-- printf("/multiline ; %s %s /target %s; %s %s /timed %s, %s %s",cmdChar,pName, CurrTarget,cmdChar,pName ,cDelay, cmdSelf, _G["cmdString"])
+								if not DEBUG then
+									mq.cmdf("/multiline ; %s %s /target %s; %s %s /timed %s, %s %s",cmdChar,pName, CurrTarget,cmdChar,pName ,cDelay, cmdSelf, _G["cmdString"])
+								else
+									 printf("/multiline ; %s %s /target %s; %s %s /timed %s, %s %s",cmdChar,pName, CurrTarget,cmdChar,pName ,cDelay, cmdSelf, _G["cmdString"])
+								end
 								cDelay = cDelay + (delay * 10)
 							end
-							mq.cmdf("/timed %s, %s %s",cDelay,cmdSelf, _G["cmdString"])
-							-- printf("/timed %s, %s %s",cDelay,cmdSelf, _G["cmdString"])
+							if not DEBUG then
+								mq.cmdf("/timed %s, %s %s",cDelay,cmdSelf, _G["cmdString"])
+							else
+								 printf("/timed %s, %s %s",cDelay,cmdSelf, _G["cmdString"])
+							end
 						end
 						ImGui.SameLine()
 						if ImGui.Button('Zone Members ##DialogDBCombined') then
-							mq.cmdf("/multiline ; %s /target %s; /timed 5, %s %s %s",cmdZone, CurrTarget,cmdZone,cmdSelf, _G["cmdString"])
-							-- printf("/multiline ; %s /target %s; /timed 5, %s %s %s",cmdZone, CurrTarget,cmdZone,cmdSelf, _G["cmdString"])
+							if not DEBUG then
+								mq.cmdf("/multiline ; %s /target %s; /timed 5, %s %s %s",cmdZone, CurrTarget,cmdZone,cmdSelf, _G["cmdString"])
+							else
+								 printf("/multiline ; %s /target %s; /timed 5, %s %s %s",cmdZone, CurrTarget,cmdZone,cmdSelf, _G["cmdString"])
+							end
 						end
 					end
 				end
@@ -411,7 +442,6 @@ local function GUI_Main()
 						ImGui.TableNextColumn()
 						if ImGui.Button("Delete##DialogDB_Config_"..id) then
 							Dialog[serverName][tmpTarget][z][d] = nil
-							-- printf("Deleted: %s %s %s %s",tmpTarget,z,d,c)
 							mq.pickle(dialogData, Dialog)
 						end
 						ImGui.SameLine()
@@ -448,7 +478,6 @@ local function GUI_Main()
 			newCmd = "NEW"
 			newDesc = "NEW"
 			editGUI = true
-			-- mq.pickle(dialogData, Dialog)
 		end
 		ImGui.SameLine()
 		if ImGui.Button("Refresh Target##DialogConf_Refresh") then
