@@ -25,3 +25,5 @@ Zone checks for either Current Zone name or 'allzones'.
 ```/dialogdb addall ["Value"] Adds to All Zones description and command = Value```
 
 https://vimeo.com/945631902?share=copy
+
+https://vimeo.com/946006521?share=copy
