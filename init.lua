@@ -7,7 +7,7 @@ local hasDialog = false
 local Dialog = require('npc_dialog')
 local curZone = mq.TLO.Zone.ShortName() or 'None'
 local serverName = mq.TLO.EverQuest.Server()
-local ShowDialog, ConfUIm, editGUI = false, false, false
+local ShowDialog, ConfUI, editGUI = false, false, false
 local cmdGroup = '/dgae /say'
 local cmdZone = '/dgza /say'
 local cmdChar = '/dex'
@@ -45,6 +45,10 @@ local function printHelp()
 	printf("%s\agNPC Dialog DB \aoAll Zones:",msgPref)
 	printf("%s\ay/dialogdb addall \aw[\at\"description\"\aw] [\at\"command\"\aw] \aoAdds to All Zones description and command",msgPref)
 	printf("%s\ay/dialogdb addall \aw[\at\"Value\"\aw] \aoAdds to All Zones description and command = Value ",msgPref)
+	printf("%s\agNPC Dialog DB \aoCommon:",msgPref)
+	printf("%s\ay/dialogdb \aoDisplay Help",msgPref)
+	printf("%s\ay/dialogdb config \aoDisplay Config Window",msgPref)
+	
 end	
 
 local function checkDialog()
@@ -81,6 +85,10 @@ local function bind(...)
 	local key = args[1]
 	local valueChanged = false
 	if #args == 1 then
+		if args[1] == 'config' then
+			ConfUI = true
+			return
+		end
 		printHelp()
 		print("No String Supplied try again~")
 		return
@@ -196,6 +204,9 @@ local function EditGUI(server,target,zone,desc,cmd)
 	end
 	ImGui.Separator()
 	if ImGui.Button("Save##EditDialogSave") then
+		if Dialog[server][target] == nil then
+			Dialog[server][target] = {}
+		end
 		if eZone == 'allzones' then
 			if Dialog[server][target]['allzones'] == nil then
 				Dialog[server][target]['allzones'] = {}
@@ -215,6 +226,11 @@ local function EditGUI(server,target,zone,desc,cmd)
 	ImGui.SameLine()
 	if ImGui.Button("Cancel##EditDialogCancel") then
 		editGUI = false
+	end
+	ImGui.SameLine()
+	if ImGui.Button("Refresh Target##DialogConf_Refresh") then
+		tmpTarget = mq.TLO.Target.DisplayName()
+		target = tmpTarget
 	end
 
 end
@@ -385,6 +401,9 @@ local function GUI_Main()
 			ImGui.TableSetupColumn("##DialogDB_Config_Save", ImGuiTableColumnFlags.WidthStretch)
 			ImGui.TableHeadersRow()
 			local id = 1
+			if Dialog[serverName][tmpTarget] == nil then
+				Dialog[serverName][tmpTarget] = {}
+			else
 			for z, zData in pairs(Dialog[serverName][tmpTarget]) do
 				for d, c in pairs(zData) do
 					ImGui.TableNextRow()
@@ -419,6 +438,7 @@ local function GUI_Main()
 					id = id + 1
 				end
 			end
+		end
 			ImGui.EndTable()
 			ImGui.EndChild()
 		end
@@ -432,6 +452,10 @@ local function GUI_Main()
 			newDesc = "NEW"
 			editGUI = true
 			-- mq.pickle(dialogData, Dialog)
+		end
+		ImGui.SameLine()
+		if ImGui.Button("Refresh Target##DialogConf_Refresh") then
+			tmpTarget = mq.TLO.Target.DisplayName()
 		end
 		ImGui.End()
 	end
