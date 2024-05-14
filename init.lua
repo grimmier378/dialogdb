@@ -8,8 +8,8 @@ local Dialog = require('npc_dialog')
 local curZone = mq.TLO.Zone.ShortName() or 'None'
 local serverName = mq.TLO.EverQuest.Server()
 local ShowDialog, ConfUI, editGUI = false, false, false
-local cmdGroup = '/dgae /say'
-local cmdZone = '/dgza /say'
+local cmdGroup = '/dgae'
+local cmdZone = '/dgza'
 local cmdChar = '/dex'
 local cmdSelf = '/say'
 local tmpDesc = ''
@@ -19,6 +19,7 @@ local eZone, eTar, eDes, eCmd, newCmd, newDesc = '', '', '', '', '', ''
 local CurrTarget = mq.TLO.Target.DisplayName() or 'None'
 local dialogData = mq.configDir ..'/npc_dialog.lua'
 local dialogConfig = mq.configDir ..'/DialogDB_Config.lua'
+local entries = {}
 local Config = {
 	cmdGroup = cmdGroup,
 	cmdZone = cmdZone,
@@ -37,6 +38,38 @@ local function File_Exists(name)
 	if f~=nil then io.close(f) return true else return false end
 end
 
+local function fixEnding(var)
+	var = var or "" -- ensure var is not nil
+
+	-- Check if var ends with '/' or ' '
+	if not var:match("[/ ]$") then
+		var = var .. " "
+	end
+
+	return var
+end
+
+local function loadSettings()
+	if not File_Exists(dialogData) then
+		mq.pickle(dialogData, Dialog)
+	else
+		Dialog = dofile(dialogData)
+	end
+	if not File_Exists(dialogConfig) then
+		mq.pickle(dialogConfig, {cmdGroup = cmdGroup, cmdZone = cmdZone, cmdChar = cmdChar, cmdSelf = cmdSelf})
+		ConfUI = true
+		tmpTarget = 'None'
+	else
+		Config = dofile(dialogConfig)
+		cmdGroup = fixEnding(Config.cmdGroup)
+		cmdZone = fixEnding(Config.cmdZone)
+		cmdChar = Config.cmdChar
+		cmdSelf = Config.cmdSelf
+	end
+	
+
+end
+
 local function printHelp()
 	local msgPref = string.format("\aw[\at%s\aw] ",mq.TLO.Time.Time24())
 	printf("\aw[\at%s\aw] \agNPC Dialog DB \aoCommands:",msgPref)
@@ -50,7 +83,6 @@ local function printHelp()
 	printf("%s\ay/dialogdb help \aoDisplay Help",msgPref)
 	printf("%s\ay/dialogdb config \aoDisplay Config Window",msgPref)
 	printf("%s\ay/dialogdb debug \aoToggles Debugging, Turns off Commands and Prints them out so you can verify them",msgPref)
-	
 end	
 
 local function checkDialog()
@@ -182,8 +214,6 @@ local function handleCombinedDialog()
 	return combinedTable
 end
 
-local entries = {}
-
 local function EditGUI(server, target, zone, desc, cmd)
 	if #entries == 0 then
 		table.insert(entries, {desc = desc, cmd = cmd})
@@ -240,67 +270,6 @@ local function EditGUI(server, target, zone, desc, cmd)
 	end
 end
 
-
--- local function EditGUI(server,target,zone,desc,cmd)
-
--- 	ImGui.Text("Edit Dialog")
--- 	ImGui.Separator()
--- 	ImGui.Text("Target: %s",target)
--- 	ImGui.Text("Zone: %s",zone)
--- 	ImGui.SameLine()
--- 	local aZones = false
--- 	if zone == 'allzones' then aZones = true end
--- 	aZones, _ = ImGui.Checkbox("All Zones##EditDialogAllZones", zone == 'allzones')
--- 		if aZones then
--- 			eZone = 'allzones'
--- 			zone= 'allzones'
--- 		else
--- 			eZone = curZone
--- 			zone = curZone
--- 		end
--- 	ImGui.Separator()
--- 	ImGui.Text("Description:")
--- 	ImGui.SameLine()
-	
--- 	newDesc, _ = ImGui.InputText("##EditDialogDesc", newDesc)
--- 	if desc ~= newDesc then
--- 		desc = newDesc
--- 	end
--- 	ImGui.Text("Command:")
--- 	ImGui.SameLine()
-	
--- 	newCmd, _ = ImGui.InputText("##EditDialogCmd", newCmd)
--- 	if newCmd ~= cmd then
--- 		cmd = newCmd
--- 	end
--- 	ImGui.Separator()
--- 	if ImGui.Button("Save##EditDialogSave") then
--- 		if Dialog[server][target] == nil then
--- 			Dialog[server][target] = {}
--- 		end
--- 		if eZone == 'allzones' then
--- 			if Dialog[server][target]['allzones'] == nil then
--- 				Dialog[server][target]['allzones'] = {}
--- 			end
--- 			Dialog[server][target]['allzones'][eDes] = nil
--- 			Dialog[server][target]['allzones'][newDesc] = cmd
--- 		else
--- 			if Dialog[server][target][zone] == nil then
--- 				Dialog[server][target][zone] = {}
--- 			end
--- 			Dialog[server][target][zone][eDes] = nil
--- 			Dialog[server][target][zone][newDesc] = cmd
--- 		end
--- 		mq.pickle(dialogData, Dialog)
--- 		editGUI = false
--- 	end
--- 	ImGui.SameLine()
--- 	if ImGui.Button("Cancel##EditDialogCancel") then
--- 		editGUI = false
--- 	end
--- end
-
--- local tmpName = tmpDesc or ''
 local function GUI_Main()
 	--- Dialog Main Window
 	if ShowDialog then
@@ -353,9 +322,9 @@ local function GUI_Main()
 						ImGui.SameLine()
 						if ImGui.Button('Group Say ##DialogDBCombined') then
 							if not DEBUG then
-								mq.cmdf("/multiline ; %s /target %s; /timed 5, %s %s %s",cmdGroup, CurrTarget,cmdGroup,cmdSelf,_G["cmdString"])
+								mq.cmdf("/multiline ; %s/target %s; /timed 5, %s%s %s",cmdGroup, CurrTarget,cmdGroup,cmdSelf,_G["cmdString"])
 							else
-								 printf("/multiline ; %s /target %s; /timed 5, %s %s %s",cmdGroup, CurrTarget,cmdGroup,cmdSelf,_G["cmdString"])
+								 printf("/multiline ; %s/target %s; /timed 5, %s%s %s",cmdGroup, CurrTarget,cmdGroup,cmdSelf,_G["cmdString"])
 							end
 						end
 						ImGui.SameLine()
@@ -369,10 +338,15 @@ local function GUI_Main()
 							local cDelay = delay * 10
 							for i = 1, mq.TLO.Me.GroupSize() - 1 do
 								local pName = mq.TLO.Group.Member(i).DisplayName()
-								if not DEBUG then
-									mq.cmdf("/multiline ; %s %s /target %s; %s %s /timed %s, %s %s",cmdChar,pName, CurrTarget,cmdChar,pName ,cDelay, cmdSelf, _G["cmdString"])
+								if cmdChar:find("/bct") then
+									pName = pName.." /"
 								else
-									 printf("/multiline ; %s %s /target %s; %s %s /timed %s, %s %s",cmdChar,pName, CurrTarget,cmdChar,pName ,cDelay, cmdSelf, _G["cmdString"])
+									pName = pName.." "
+								end
+								if not DEBUG then
+									mq.cmdf("/multiline ; %s %s/target %s; %s %s/timed %s, %s %s",cmdChar,pName, CurrTarget,cmdChar,pName ,cDelay, cmdSelf, _G["cmdString"])
+								else
+									 printf("/multiline ; %s %s/target %s; %s %s/timed %s, %s %s",cmdChar,pName, CurrTarget,cmdChar,pName ,cDelay, cmdSelf, _G["cmdString"])
 								end
 								cDelay = cDelay + (delay * 10)
 							end
@@ -385,9 +359,9 @@ local function GUI_Main()
 						ImGui.SameLine()
 						if ImGui.Button('Zone Members ##DialogDBCombined') then
 							if not DEBUG then
-								mq.cmdf("/multiline ; %s /target %s; /timed 5, %s %s %s",cmdZone, CurrTarget,cmdZone,cmdSelf, _G["cmdString"])
+								mq.cmdf("/multiline ; %s/target %s; /timed 5, %s%s %s",cmdZone, CurrTarget,cmdZone,cmdSelf, _G["cmdString"])
 							else
-								 printf("/multiline ; %s /target %s; /timed 5, %s %s %s",cmdZone, CurrTarget,cmdZone,cmdSelf, _G["cmdString"])
+								 printf("/multiline ; %s/target %s; /timed 5, %s%s %s",cmdZone, CurrTarget,cmdZone,cmdSelf, _G["cmdString"])
 							end
 						end
 					end
@@ -558,22 +532,7 @@ end
 
 local function init()
 	if mq.TLO.MacroQuest.BuildName() ~= 'Emu' then serverName = 'Live' end -- really only care about server name for EMU as the dialogs may vary from serever to server to server
-	if not File_Exists(dialogData) then
-		mq.pickle(dialogData, Dialog)
-	else
-		Dialog = dofile(dialogData)
-	end
-	if not File_Exists(dialogConfig) then
-		mq.pickle(dialogConfig, {cmdGroup = cmdGroup, cmdZone = cmdZone, cmdChar = cmdChar, cmdSelf = cmdSelf})
-		ConfUI = true
-		tmpTarget = 'None'
-	else
-		Config = dofile(dialogConfig)
-		cmdGroup = Config.cmdGroup
-		cmdZone = Config.cmdZone
-		cmdChar = Config.cmdChar
-		cmdSelf = Config.cmdSelf
-	end
+	loadSettings()
 	Running = true
 	mq.bind('/dialogdb', bind)
 	mq.imgui.init("Npc Dialog", GUI_Main)
