@@ -13,7 +13,7 @@ local cmdZone = '/dgza'
 local cmdChar = '/dex'
 local cmdSelf = '/say'
 local tmpDesc = ''
-local DEBUG = false
+local DEBUG, newTarget = false, false
 local tmpTarget = 'None'
 local eZone, eTar, eDes, eCmd, newCmd, newDesc = '', '', '', '', '', ''
 local CurrTarget = mq.TLO.Target.DisplayName() or 'None'
@@ -66,8 +66,19 @@ local function loadSettings()
 		cmdChar = Config.cmdChar
 		cmdSelf = Config.cmdSelf
 	end
-	
-
+	for server,sData in pairs(Dialog) do
+		for target,tData in pairs(sData) do
+			for zone,zData in pairs(tData) do
+				for desc,cmd in pairs(zData) do
+					if not cmd:match("^/") then
+						Dialog[server][target][zone][desc] = string.format("/say %s",cmd)
+					end
+				end
+			end
+		end
+	end
+	mq.pickle(dialogData, Dialog)
+	printf("Dialog Data Loaded for %s",serverName)
 end
 
 local function printHelp()
@@ -143,7 +154,7 @@ local function bind(...)
 	local name = mq.TLO.Target.DisplayName() or 'None'
 	if key ~= nil then
 		local value = args[2]
-		if key == 'add' then
+		if key == 'add' and #args >= 2 then
 			local name = mq.TLO.Target.DisplayName() or 'None'
 			if name ~= 'None' then
 				if Dialog[serverName] == nil then
@@ -157,17 +168,20 @@ local function bind(...)
 				end
 				if #args == 2 then
 					if Dialog[serverName][name][curZone][value] == nil then
-						Dialog[serverName][name][curZone][value] = value
+						local cmdValue = value
+						if not cmdValue:match("^/") then cmdValue = string.format("/say %s",cmdValue) end
+						Dialog[serverName][name][curZone][value] = cmdValue
 						-- printf("Server: %s  Zone: %s Target: %s Dialog: %s",serverName,curZone,name, value)
 					end
 				elseif #args == 3 then
 					if Dialog[serverName][name][curZone][args[2]] == nil then
+						if not args[3]:match("^/") then args[3] = string.format("/say %s",args[3]) end
 						Dialog[serverName][name][curZone][args[2]] = args[3]
 					end
 				end
 				valueChanged = true
 			end
-		elseif key == "addall" then
+		elseif key == "addall" and #args >= 2 then
 			if name ~= 'None' then
 				if Dialog[serverName] == nil then
 					Dialog[serverName] = {}
@@ -180,10 +194,13 @@ local function bind(...)
 				end
 				if #args == 2 then
 					if Dialog[serverName][name]['allzones'][value] == nil then
-						Dialog[serverName][name]['allzones'][value] = value
+						local cmdValue = value
+						if not cmdValue:match("^/") then cmdValue = string.format("/say %s",cmdValue) end
+						Dialog[serverName][name]['allzones'][value] = cmdValue
 					end
 				elseif #args == 3 then
 					if Dialog[serverName][name]['allzones'][args[2]] == nil then
+						if not args[3]:match("^/") then args[3] = string.format("/say %s",args[3]) end
 						Dialog[serverName][name]['allzones'][args[2]] = args[3]
 					end
 				end
@@ -227,8 +244,14 @@ local function EditGUI(server, target, zone, desc, cmd)
 
 	local aZones = (zone == 'allzones')
 	aZones, _ = ImGui.Checkbox("All Zones##EditDialogAllZones", aZones)
-	local eZone = aZones and 'allzones' or curZone
-
+	eZone = aZones and 'allzones' or curZone
+	if zone ~= eZone then
+		zone = eZone
+	end
+	ImGui.SameLine()
+	if ImGui.Button("Add Row##AddRowButton") then
+		table.insert(entries, {desc = "NEW", cmd = "NEW"})
+	end
 	ImGui.Separator()
 	ImGui.Text("Description:")
 	ImGui.SameLine(160)
@@ -248,13 +271,10 @@ local function EditGUI(server, target, zone, desc, cmd)
 		ImGui.Separator()
 	end
 
-	if ImGui.Button("Add Row##AddRowButton") then
-		table.insert(entries, {desc = "NEW", cmd = "NEW"})
-	end
-	ImGui.SameLine()
 	if ImGui.Button("Save All##SaveAllButton") then
 		for _, entry in ipairs(entries) do
 			if entry.desc ~= "" and entry.desc ~= "NEW" then
+				if not entry.cmd:match("^/") then entry.cmd = string.format("/say %s", entry.cmd) end
 				Dialog[server][target] = Dialog[server][target] or {}
 				Dialog[server][target][eZone] = Dialog[server][target][eZone] or {}
 				Dialog[server][target][eZone][entry.desc] = entry.cmd
@@ -269,8 +289,6 @@ local function EditGUI(server, target, zone, desc, cmd)
 		editGUI = false
 	end
 end
-
-local newTarget = false
 
 local function GUI_Main()
 	--- Dialog Main Window
@@ -315,18 +333,21 @@ local function GUI_Main()
 					ImGui.Separator()
 					if ImGui.Button('Say ##DialogDBCombined') then
 						if not DEBUG then
-							mq.cmdf("%s %s", cmdSelf, _G["cmdString"])
+							mq.cmdf("%s",  _G["cmdString"])
 						else
-							 printf("%s %s", cmdSelf, _G["cmdString"])
+							 printf("%s",  _G["cmdString"])
 						end
 											end
 					if mq.TLO.Me.GroupSize() > 1 then
 						ImGui.SameLine()
 						if ImGui.Button('Group Say ##DialogDBCombined') then
+							if cmdGroup:find("^/d") then
+								cmdGroup = cmdGroup.." "
+							end
 							if not DEBUG then
-								mq.cmdf("/multiline ; %s/target %s; /timed 5, %s%s %s",cmdGroup, CurrTarget,cmdGroup,cmdSelf,_G["cmdString"])
+								mq.cmdf("/multiline ; %s/target %s; /timed 5, %s%s",cmdGroup, CurrTarget,cmdGroup,_G["cmdString"])
 							else
-								 printf("/multiline ; %s/target %s; /timed 5, %s%s %s",cmdGroup, CurrTarget,cmdGroup,cmdSelf,_G["cmdString"])
+								 printf("/multiline ; %s/target %s; /timed 5, %s%s",cmdGroup, CurrTarget,cmdGroup,_G["cmdString"])
 							end
 						end
 						ImGui.SameLine()
@@ -346,24 +367,27 @@ local function GUI_Main()
 									pName = pName.." "
 								end
 								if not DEBUG then
-									mq.cmdf("/multiline ; %s %s/target %s; %s %s/timed %s, %s %s",cmdChar,pName, CurrTarget,cmdChar,pName ,cDelay, cmdSelf, _G["cmdString"])
+									mq.cmdf("/multiline ; %s %s/target %s; %s %s/timed %s, %s",cmdChar,pName, CurrTarget,cmdChar,pName ,cDelay, _G["cmdString"])
 								else
-									 printf("/multiline ; %s %s/target %s; %s %s/timed %s, %s %s",cmdChar,pName, CurrTarget,cmdChar,pName ,cDelay, cmdSelf, _G["cmdString"])
+									 printf("/multiline ; %s %s/target %s; %s %s/timed %s, %s",cmdChar,pName, CurrTarget,cmdChar,pName ,cDelay,  _G["cmdString"])
 								end
 								cDelay = cDelay + (delay * 10)
 							end
 							if not DEBUG then
-								mq.cmdf("/timed %s, %s %s",cDelay,cmdSelf, _G["cmdString"])
+								mq.cmdf("/timed %s, %s",cDelay, _G["cmdString"])
 							else
-								 printf("/timed %s, %s %s",cDelay,cmdSelf, _G["cmdString"])
+								 printf("/timed %s, %s",cDelay, _G["cmdString"])
 							end
 						end
 						ImGui.SameLine()
 						if ImGui.Button('Zone Members ##DialogDBCombined') then
+							if cmdZone:find("^/d") then
+								cmdZone = cmdZone.." "
+							end
 							if not DEBUG then
-								mq.cmdf("/multiline ; %s/target %s; /timed 5, %s%s %s",cmdZone, CurrTarget,cmdZone,cmdSelf, _G["cmdString"])
+								mq.cmdf("/multiline ; %s/target %s; /timed 5, %s%s",cmdZone, CurrTarget,cmdZone, _G["cmdString"])
 							else
-								 printf("/multiline ; %s/target %s; /timed 5, %s%s %s",cmdZone, CurrTarget,cmdZone,cmdSelf, _G["cmdString"])
+								 printf("/multiline ; %s/target %s; /timed 5, %s%s",cmdZone, CurrTarget,cmdZone, _G["cmdString"])
 							end
 						end
 					end
@@ -391,10 +415,10 @@ local function GUI_Main()
 		if not showC then
 			ImGui.End()
 		end
-		local tmpGpCmd = cmdGroup or ''
-		local tmpZnCmd = cmdZone or ''
-		local tmpChCmd = cmdChar or ''
-		local tmpSlCmd = cmdSelf or ''
+		local tmpGpCmd = cmdGroup:gsub(" $","") or ''
+		local tmpZnCmd = cmdZone:gsub(" $","") or ''
+		local tmpChCmd = cmdChar:gsub(" $","") or ''
+		local tmpSlCmd = cmdSelf:gsub(" $","") or ''
 
 		ImGui.SeparatorText("Command's Config")
 
@@ -405,46 +429,46 @@ local function GUI_Main()
 		ImGui.TableNextColumn()
 		tmpGpCmd, _ = ImGui.InputText("Group Command##DialogConfig", tmpGpCmd)
 		if tmpGpCmd ~= cmdGroup then
-			cmdGroup = tmpGpCmd
+			cmdGroup = tmpGpCmd:gsub(" $","")
 		end
 		ImGui.TableNextColumn()
 		if ImGui.Button("Set Group Command##DialogConfig") then
-			Config.cmdGroup = tmpGpCmd
+			Config.cmdGroup = tmpGpCmd:gsub(" $","")
 			mq.pickle(dialogConfig, Config)
 		end
 		ImGui.TableNextRow()
 		ImGui.TableNextColumn()
 		tmpZnCmd, _ = ImGui.InputText("Zone Command##DialogConfig", tmpZnCmd)	
 		if tmpZnCmd ~= cmdZone then
-			cmdZone = tmpZnCmd
+			cmdZone = tmpZnCmd:gsub(" $","")
 		end
 		ImGui.TableNextColumn()
 		if ImGui.Button("Set Zone Command##DialogConfig") then
-			Config.cmdZone = tmpZnCmd
+			Config.cmdZone = tmpZnCmd:gsub(" $","")
 			mq.pickle(dialogConfig, Config)
 		end
 		ImGui.TableNextRow()
 		ImGui.TableNextColumn()
 		tmpChCmd, _ = ImGui.InputText("Character Command##DialogConfig", tmpChCmd)
 		if tmpChCmd ~= cmdChar then
-			cmdChar = tmpChCmd
+			cmdChar = tmpChCmd:gsub(" $","")
 		end
 		ImGui.TableNextColumn()
 		if ImGui.Button("Set Character Command##DialogConfig") then
-			Config.cmdChar = tmpChCmd
+			Config.cmdChar = tmpChCmd:gsub(" $","")
 			mq.pickle(dialogConfig, Config)
 		end
-		ImGui.TableNextRow()
-		ImGui.TableNextColumn()
-		tmpSlCmd, _ = ImGui.InputText("Self Command##DialogConfig", tmpSlCmd)
-		if tmpSlCmd ~= cmdSelf then
-			cmdSelf = tmpSlCmd
-		end
-		ImGui.TableNextColumn()
-		if ImGui.Button("Set Single Command##DialogConfig") then
-			Config.cmdSelf = tmpSlCmd
-			mq.pickle(dialogConfig, Config)
-		end
+		-- ImGui.TableNextRow()
+		-- ImGui.TableNextColumn()
+		-- tmpSlCmd, _ = ImGui.InputText("Self Command##DialogConfig", tmpSlCmd)
+		-- if tmpSlCmd ~= cmdSelf then
+		-- 	cmdSelf = tmpSlCmd:gsub(" $","")
+		-- end
+		-- ImGui.TableNextColumn()
+		-- if ImGui.Button("Set Single Command##DialogConfig") then
+		-- 	Config.cmdSelf = tmpSlCmd:gsub(" $","")
+		-- 	mq.pickle(dialogConfig, Config)
+		-- end
 		ImGui.EndTable()
 		ImGui.Separator()
 		--- Dialog Config Table
@@ -456,9 +480,9 @@ local function GUI_Main()
 			ImGui.TableSetupScrollFreeze(0, 1)
 			ImGui.TableSetupColumn("NPC##DialogDB_Config", ImGuiTableColumnFlags.WidthFixed, 100)
 			ImGui.TableSetupColumn("Zone##DialogDB_Config", ImGuiTableColumnFlags.WidthFixed, 100)
-			ImGui.TableSetupColumn("Description##DialogDB_Config", ImGuiTableColumnFlags.WidthFixed, 100)
-			ImGui.TableSetupColumn("Trigger##DialogDB_Config", ImGuiTableColumnFlags.WidthFixed, 100)
-			ImGui.TableSetupColumn("##DialogDB_Config_Save", ImGuiTableColumnFlags.WidthStretch)
+			ImGui.TableSetupColumn("Description##DialogDB_Config", ImGuiTableColumnFlags.WidthStretch, 100)
+			ImGui.TableSetupColumn("Trigger##DialogDB_Config", ImGuiTableColumnFlags.WidthStretch, 100)
+			ImGui.TableSetupColumn("##DialogDB_Config_Save", ImGuiTableColumnFlags.WidthFixed, 120)
 			ImGui.TableHeadersRow()
 			local id = 1
 			if Dialog[serverName][tmpTarget] == nil then
@@ -477,11 +501,6 @@ local function GUI_Main()
 						ImGui.TableNextColumn()
 						ImGui.Text(c)
 						ImGui.TableNextColumn()
-						if ImGui.Button("Delete##DialogDB_Config_"..id) then
-							Dialog[serverName][tmpTarget][z][d] = nil
-							mq.pickle(dialogData, Dialog)
-						end
-						ImGui.SameLine()
 						if ImGui.Button("Edit##DialogDB_Config_Edit_"..id) then
 							eZone = z
 							eTar = tmpTarget
@@ -490,6 +509,11 @@ local function GUI_Main()
 							newCmd = c
 							newDesc = d
 							editGUI = true
+						end
+						ImGui.SameLine()
+						if ImGui.Button("Delete##DialogDB_Config_"..id) then
+							Dialog[serverName][tmpTarget][z][d] = nil
+							mq.pickle(dialogData, Dialog)
 						end
 						id = id + 1
 					end
@@ -561,6 +585,11 @@ local function mainLoop()
 			CurrTarget = 'None'
 			hasDialog = false
 			ShowDialog = false
+			ConfUI = false
+			editGUI = false
+			while mq.TLO.Me.Zoning() do
+				mq.delay(1000)
+			end
 		end
 		if checkDialog() then
 			ShowDialog = true
