@@ -168,7 +168,7 @@ local function handleCombinedDialog()
 end
 
 local function EditGUI(server,target,zone,desc,cmd)
-	
+
 	ImGui.Text("Edit Dialog")
 	ImGui.Separator()
 	ImGui.Text("Server: %s",server)
@@ -227,12 +227,6 @@ local function EditGUI(server,target,zone,desc,cmd)
 	if ImGui.Button("Cancel##EditDialogCancel") then
 		editGUI = false
 	end
-	ImGui.SameLine()
-	if ImGui.Button("Refresh Target##DialogConf_Refresh") then
-		tmpTarget = mq.TLO.Target.DisplayName()
-		target = tmpTarget
-	end
-
 end
 
 -- local tmpName = tmpDesc or ''
@@ -315,6 +309,7 @@ local function GUI_Main()
 		end
 		ImGui.End()
 	end
+	
 	--- Dialog Config Window
 	if ConfUI then
 		if tmpTarget == 'None' then
@@ -402,48 +397,56 @@ local function GUI_Main()
 			ImGui.TableHeadersRow()
 			local id = 1
 			if Dialog[serverName][tmpTarget] == nil then
-				Dialog[serverName][tmpTarget] = {}
+				Dialog[serverName][tmpTarget] = {allzones = {}, [curZone] = {}}
 			else
-			for z, zData in pairs(Dialog[serverName][tmpTarget]) do
-				for d, c in pairs(zData) do
-					ImGui.TableNextRow()
-					ImGui.TableNextColumn()
-					ImGui.Text(tmpTarget)
-					ImGui.TableNextColumn()
-					ImGui.Text(z)
-					ImGui.TableNextColumn()
-					ImGui.Text(d)
-					ImGui.TableNextColumn()
-					ImGui.Text(c)
-					ImGui.TableNextColumn()
-					if ImGui.Button("Delete##DialogDB_Config_"..id) then
-						Dialog[serverName][tmpTarget][z][d] = nil
-						-- printf("Deleted: %s %s %s %s",tmpTarget,z,d,c)
-						mq.pickle(dialogData, Dialog)
-					end
-					ImGui.SameLine()
-					if ImGui.Button("Edit##DialogDB_Config_Edit_"..id) then
-						-- Dialog[serverName][tmpTarget][z][d] = nil
-						eZone = z
-						eTar = tmpTarget
-						eDes = d
-						eCmd = c
-						newCmd = c
-						newDesc = d
-						editGUI = true
+				for z, zData in pairs(Dialog[serverName][tmpTarget]) do
+					for d, c in pairs(zData) do
+						ImGui.TableNextRow()
+						ImGui.TableNextColumn()
+						ImGui.Text(tmpTarget)
+						ImGui.TableNextColumn()
+						ImGui.Text(z)
+						ImGui.TableNextColumn()
+						ImGui.Text(d)
+						ImGui.TableNextColumn()
+						ImGui.Text(c)
+						ImGui.TableNextColumn()
+						if ImGui.Button("Delete##DialogDB_Config_"..id) then
+							Dialog[serverName][tmpTarget][z][d] = nil
+							-- printf("Deleted: %s %s %s %s",tmpTarget,z,d,c)
+							mq.pickle(dialogData, Dialog)
+						end
+						ImGui.SameLine()
+						if ImGui.Button("Edit##DialogDB_Config_Edit_"..id) then
+							-- Dialog[serverName][tmpTarget][z][d] = nil
+							eZone = z
+							eTar = tmpTarget
+							eDes = d
+							eCmd = c
+							newCmd = c
+							newDesc = d
+							editGUI = true
 
-						-- printf("Editing: %s %s %s %s",tmpTarget,z,d,c)
-						-- mq.pickle(dialogData, Dialog)
+							-- printf("Editing: %s %s %s %s",tmpTarget,z,d,c)
+							-- mq.pickle(dialogData, Dialog)
+						end
+						id = id + 1
 					end
-					id = id + 1
 				end
 			end
-		end
 			ImGui.EndTable()
+			if ImGui.Button("Delete NPC##DialogConfig") then
+				Dialog[serverName][tmpTarget] = nil
+				mq.pickle(dialogData, Dialog)
+				ConfUI = false
+			end
 			ImGui.EndChild()
 		end
 		
 		if ImGui.Button("Add Dialog##DialogConfig") then
+			if Dialog[serverName][tmpTarget] == nil then
+				Dialog[serverName][tmpTarget] = {allzones = {}, [curZone] = {}}
+			end
 			eZone = curZone
 			eTar = tmpTarget
 			eDes = "NEW"
@@ -459,6 +462,8 @@ local function GUI_Main()
 		end
 		ImGui.End()
 	end
+
+	--- Dialog Edit Window
 	if editGUI then
 		local openE, showE = ImGui.Begin("Edit Dialog##Dialog_Edit", true, ImGuiWindowFlags.NoCollapse)
 		if not openE then
