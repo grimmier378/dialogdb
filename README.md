@@ -5,10 +5,12 @@ Will store NPC dialog into a table
 
 You can select the dialog if the NPC is targeted and has Dialog for that zone.
 
-##Table Layout
+## Table Layout
+
 [ServerName][NPC Name][Zone][DialogDescription] = Dialog
 
-Zone checks for either Current Zone name or 'allzones'
+Zone checks for either Current Zone name or 'allzones'.
+
 'allzones' is dialog for any zone you see the NPC in. Ex.Priest of Discord and Soul Binder 
 
 # NPC Dialog DB Commands
