@@ -270,6 +270,8 @@ local function EditGUI(server, target, zone, desc, cmd)
 	end
 end
 
+local newTarget = false
+
 local function GUI_Main()
 	--- Dialog Main Window
 	if ShowDialog then
@@ -379,6 +381,10 @@ local function GUI_Main()
 		ImGui.SetNextWindowSize(580,350, ImGuiCond.Appearing)
 		local openC, showC = ImGui.Begin("NPC Dialog Config##Dialog_Config", true, ImGuiWindowFlags.None)
 		if not openC then
+			if newTarget then
+				Dialog[serverName][tmpTarget] = nil
+				newTarget = false
+			end
 			ConfUI = false
 			tmpTarget = 'None'
 		end
@@ -457,6 +463,7 @@ local function GUI_Main()
 			local id = 1
 			if Dialog[serverName][tmpTarget] == nil then
 				Dialog[serverName][tmpTarget] = {allzones = {}, [curZone] = {}}
+				newTarget = true
 			else
 				for z, zData in pairs(Dialog[serverName][tmpTarget]) do
 					for d, c in pairs(zData) do
@@ -512,6 +519,14 @@ local function GUI_Main()
 		ImGui.SameLine()
 		if ImGui.Button("Refresh Target##DialogConf_Refresh") then
 			tmpTarget = mq.TLO.Target.DisplayName()
+		end
+		ImGui.SameLine()
+		if ImGui.Button("Cancel##DialogConf_Cancel") then
+			if newTarget then
+				Dialog[serverName][tmpTarget] = nil
+				newTarget = false
+			end
+			ConfUI = false
 		end
 		ImGui.End()
 	end
