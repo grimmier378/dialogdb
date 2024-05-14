@@ -267,8 +267,8 @@ local function GUI_Main()
 					if mq.TLO.Me.GroupSize() > 1 then
 						ImGui.SameLine()
 						if ImGui.Button('Group Say ##DialogDBCombined') then
-							-- mq.cmdf("%s%s",cmdGroup, _G["cmdString"])
-							printf("%s %s",cmdGroup, _G["cmdString"])
+							mq.cmdf("/multiline ; %s /target %s; /timed 5, %s %s %s",cmdGroup, CurrTarget,cmdGroup,cmdSelf,_G["cmdString"])
+							-- printf("/multiline ; %s /target %s; /timed 5, %s %s %s",cmdGroup, CurrTarget,cmdGroup,cmdSelf,_G["cmdString"])
 						end
 						ImGui.SameLine()
 						local tmpDelay = delay
@@ -281,18 +281,17 @@ local function GUI_Main()
 							local cDelay = delay * 10
 							for i = 1, mq.TLO.Me.GroupSize() - 1 do
 								local pName = mq.TLO.Group.Member(i).DisplayName()
-								-- mq.cmdf("/multiline ; %s %s /target %s; %s %s /timed %s, /say %s",cmdChar,pName, CurrTarget,cmdChar,pName ,cDelay, _G["cmdString"])
-								printf("/multiline ; %s %s /target %s; %s %s /timed %s, %s %s",cmdChar,pName, CurrTarget,cmdChar,pName ,cDelay, cmdSelf, _G["cmdString"])
+								mq.cmdf("/multiline ; %s %s /target %s; %s %s /timed %s, %s %s",cmdChar,pName, CurrTarget,cmdChar,pName ,cDelay, cmdSelf, _G["cmdString"])
+								-- printf("/multiline ; %s %s /target %s; %s %s /timed %s, %s %s",cmdChar,pName, CurrTarget,cmdChar,pName ,cDelay, cmdSelf, _G["cmdString"])
 								cDelay = cDelay + (delay * 10)
 							end
-							-- mq.cmdf("/timed %s, %s%s",cDelay,cmdSelf, _G["cmdString"])
-							printf("/timed %s, %s %s",cDelay,cmdSelf, _G["cmdString"])
+							mq.cmdf("/timed %s, %s %s",cDelay,cmdSelf, _G["cmdString"])
+							-- printf("/timed %s, %s %s",cDelay,cmdSelf, _G["cmdString"])
 						end
 						ImGui.SameLine()
 						if ImGui.Button('Zone Members ##DialogDBCombined') then
-							local cDelay = delay * 10
-							-- mq.cmdf("%s%s",cmdZone, _G["cmdString"])
-							printf("%s %s",cmdZone, _G["cmdString"])
+							mq.cmdf("/multiline ; %s /target %s; /timed 5, %s %s %s",cmdZone, CurrTarget,cmdZone,cmdSelf, _G["cmdString"])
+							-- printf("/multiline ; %s /target %s; /timed 5, %s %s %s",cmdZone, CurrTarget,cmdZone,cmdSelf, _G["cmdString"])
 						end
 					end
 				end
