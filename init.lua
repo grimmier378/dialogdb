@@ -121,7 +121,12 @@ end
 
 local function eventNPC(line,who)
 	if not autoAdd then return end
-	local check = string.format("npc= %s",who)
+	local tmpCheck = string.format("%s", mq.TLO.Target.DisplayName())
+	if who:find("^"..tmpCheck) or line:find("^"..tmpCheck) then
+		who = mq.TLO.Target.DisplayName()
+	end
+	print(who)
+	local check = string.format("npc =%s",who)
 	if mq.TLO.SpawnCount(check) == nil then return end
 	local found = false
 	if Dialog[serverName][who] == nil then
@@ -129,13 +134,14 @@ local function eventNPC(line,who)
 		Dialog[serverName][who][curZone] = {}
 		Dialog[serverName][who]['allzones'] = {}
 	end
-	for w in string.gmatch(line, "%[(.-)%].") do
+	for w in string.gmatch(line, "%[(.-)%]") do
 		if Dialog[serverName][who][curZone][w] == nil then
 			Dialog[serverName][who][curZone][w] =  w
 			found = true
 		end
 	end
 	if found then
+		if ConfUI then newTarget = false end
 		mq.pickle(dialogData, Dialog)
 		loadSettings()
 	end
@@ -143,11 +149,13 @@ end
 
 local function setEvents()
 	if autoAdd then
-		mq.event("npc_say1", '#1# say#*#[#*#]#*#', eventNPC)
-		mq.event("npc_whisper2", '#1# whisper#*#[#*#]#*#', eventNPC)
+		-- mq.event("npc_say1", '#1# say#*#[#*#]#*#', eventNPC)
+		-- mq.event("npc_whisper2", '#1# whisper#*#[#*#]#*#', eventNPC)
+		mq.event("npc_emotes3", '#1# #*# [#*#]#*#', eventNPC)
 	else
-		mq.unevent("npc_say1")
-		mq.unevent("npc_whisper2")
+		-- mq.unevent("npc_say1")
+		-- mq.unevent("npc_whisper2")
+		mq.unevent("npc_emotes3")
 	end
 end
 
@@ -347,7 +355,7 @@ local function EditGUI(server, target, zone, desc, cmd)
 	ImGui.EndChild()
 
 end
-
+local inputText = ""
 local function GUI_Main()
 	--- Dialog Main Window
 	if ShowDialog then
@@ -522,17 +530,6 @@ local function GUI_Main()
 			Config.cmdChar = tmpChCmd:gsub(" $","")
 			mq.pickle(dialogConfig, Config)
 		end
-		-- ImGui.TableNextRow()
-		-- ImGui.TableNextColumn()
-		-- tmpSlCmd, _ = ImGui.InputText("Self Command##DialogConfig", tmpSlCmd)
-		-- if tmpSlCmd ~= cmdSelf then
-		-- 	cmdSelf = tmpSlCmd:gsub(" $","")
-		-- end
-		-- ImGui.TableNextColumn()
-		-- if ImGui.Button("Set Single Command##DialogConfig") then
-		-- 	Config.cmdSelf = tmpSlCmd:gsub(" $","")
-		-- 	mq.pickle(dialogConfig, Config)
-		-- end
 		ImGui.EndTable()
 		ImGui.Separator()
 		--- Dialog Config Table
@@ -625,6 +622,10 @@ local function GUI_Main()
 				Dialog[serverName][tmpTarget] = nil
 				newTarget = false
 			end
+			ConfUI = false
+		end
+		ImGui.SameLine()
+		if ImGui.Button("Close##DialogConf_Close") then
 			ConfUI = false
 		end
 		ImGui.End()
