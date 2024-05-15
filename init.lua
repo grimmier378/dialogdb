@@ -130,13 +130,13 @@ local function eventNPC(line,who)
 	end
 	for w in string.gmatch(line, "%[(.-)%].") do
 		if Dialog[serverName][who][curZone][w] == nil then
-			Dialog[serverName][who][curZone][w] = w
+			Dialog[serverName][who][curZone][w] =  w
 			found = true
 		end
 	end
 	if found then
 		mq.pickle(dialogData, Dialog)
-		Dialog = dofile(dialogData)
+		loadSettings()
 	end
 end
 
