@@ -50,10 +50,27 @@ local function fixEnding(var)
 end
 
 local function loadSettings()
+	-- Check if the dialog data file exists
 	if not File_Exists(dialogData) then
 		mq.pickle(dialogData, Dialog)
 	else
-		Dialog = dofile(dialogData)
+		local tmpDialog = dofile(dialogData)
+		for server, sData in pairs(Dialog) do
+			tmpDialog[server] = tmpDialog[server] or {}
+			for target, tData in pairs(sData) do
+				tmpDialog[server][target] = tmpDialog[server][target] or {}
+				for zone, zData in pairs(tData) do
+					tmpDialog[server][target][zone] = tmpDialog[server][target][zone] or {}
+					for desc, cmd in pairs(zData) do
+						-- Only add default entries if they do not exist in the saved data
+						if not tmpDialog[server][target][zone][desc] then
+							tmpDialog[server][target][zone][desc] = cmd
+						end
+					end
+				end
+			end
+		end
+		Dialog = tmpDialog
 	end
 	if not File_Exists(dialogConfig) then
 		mq.pickle(dialogConfig, {cmdGroup = cmdGroup, cmdZone = cmdZone, cmdChar = cmdChar, cmdSelf = cmdSelf})
@@ -61,11 +78,13 @@ local function loadSettings()
 		tmpTarget = 'None'
 	else
 		Config = dofile(dialogConfig)
-		cmdGroup = fixEnding(Config.cmdGroup)
-		cmdZone = fixEnding(Config.cmdZone)
+		cmdGroup = Config.cmdGroup
+		cmdZone = Config.cmdZone
 		cmdChar = Config.cmdChar
 		cmdSelf = Config.cmdSelf
 	end
+
+	--- Ensure that the command is a '/'' command otherwise add '/say ' to the front of it
 	for server,sData in pairs(Dialog) do
 		for target,tData in pairs(sData) do
 			for zone,zData in pairs(tData) do
@@ -235,7 +254,7 @@ local function EditGUI(server, target, zone, desc, cmd)
 	if #entries == 0 then
 		table.insert(entries, {desc = desc, cmd = cmd})
 	end
-
+	
 	ImGui.Text("Edit Dialog")
 	ImGui.Separator()
 	ImGui.Text(string.format("Target: %s", target))
@@ -248,14 +267,33 @@ local function EditGUI(server, target, zone, desc, cmd)
 	if zone ~= eZone then
 		zone = eZone
 	end
+	if ImGui.Button("Save All##SaveAllButton") then
+		for _, entry in ipairs(entries) do
+			if entry.desc ~= "" and entry.desc ~= "NEW" then
+				if not entry.cmd:match("^/") then entry.cmd = string.format("/say %s", entry.cmd) end
+				Dialog[server][target] = Dialog[server][target] or {}
+				Dialog[server][target][eZone] = Dialog[server][target][eZone] or {}
+				Dialog[server][target][eZone][entry.desc] = entry.cmd
+			end
+		end
+		mq.pickle(dialogData, Dialog)
+		newTarget = false
+		editGUI = false
+	end
 	ImGui.SameLine()
 	if ImGui.Button("Add Row##AddRowButton") then
+		table.insert(entries, {desc = "NEW", cmd = "NEW"})
+	end
+	ImGui.SameLine()
+	if ImGui.Button("Clear##ClearRowsButton") then
+		entries = {}
 		table.insert(entries, {desc = "NEW", cmd = "NEW"})
 	end
 	ImGui.Separator()
 	ImGui.Text("Description:")
 	ImGui.SameLine(160)
 	ImGui.Text("Command:")
+	ImGui.BeginChild("##EditDialogChild", 0.0, 0.0, ImGuiChildFlags.Border)
 	for i, entry in ipairs(entries) do
 
 		ImGui.SetNextItemWidth(150)
@@ -270,24 +308,8 @@ local function EditGUI(server, target, zone, desc, cmd)
 
 		ImGui.Separator()
 	end
+	ImGui.EndChild()
 
-	if ImGui.Button("Save All##SaveAllButton") then
-		for _, entry in ipairs(entries) do
-			if entry.desc ~= "" and entry.desc ~= "NEW" then
-				if not entry.cmd:match("^/") then entry.cmd = string.format("/say %s", entry.cmd) end
-				Dialog[server][target] = Dialog[server][target] or {}
-				Dialog[server][target][eZone] = Dialog[server][target][eZone] or {}
-				Dialog[server][target][eZone][entry.desc] = entry.cmd
-			end
-		end
-		mq.pickle(dialogData, Dialog)
-		editGUI = false
-	end
-
-	ImGui.SameLine()
-	if ImGui.Button("Cancel##EditDialogCancel") then
-		editGUI = false
-	end
 end
 
 local function GUI_Main()
@@ -403,7 +425,7 @@ local function GUI_Main()
 			tmpTarget = CurrTarget
 		end
 		ImGui.SetNextWindowSize(580,350, ImGuiCond.Appearing)
-		local openC, showC = ImGui.Begin("NPC Dialog Config##Dialog_Config", true, ImGuiWindowFlags.None)
+		local openC, showC = ImGui.Begin("NPC Dialog Config##Dialog_Config", true, ImGuiWindowFlags.NoCollapse)
 		if not openC then
 			if newTarget then
 				Dialog[serverName][tmpTarget] = nil
@@ -474,9 +496,9 @@ local function GUI_Main()
 		--- Dialog Config Table
 		if tmpTarget ~= nil and tmpTarget ~= 'None' then
 			local sizeX, sizeY = ImGui.GetContentRegionAvail()
-			ImGui.BeginChild("DialogConfigChild", sizeX,sizeY -30,bit32.bor(ImGuiChildFlags.Border, ImGuiChildFlags.AutoResizeY))
 			ImGui.SeparatorText(tmpTarget.."'s Dialogs")
-			ImGui.BeginTable("NPC Dialogs##DialogConfigTable2", 5, ImGuiTableFlags.Borders)
+			-- ImGui.BeginChild("DialogConfigChild", sizeX, sizeY -30, bit32.bor(ImGuiChildFlags.Border))
+			ImGui.BeginTable("NPC Dialogs##DialogConfigTable2", 5, bit32.bor(ImGuiTableFlags.Borders,ImGuiTableFlags.ScrollY),ImVec2(sizeX,sizeY-80))
 			ImGui.TableSetupScrollFreeze(0, 1)
 			ImGui.TableSetupColumn("NPC##DialogDB_Config", ImGuiTableColumnFlags.WidthFixed, 100)
 			ImGui.TableSetupColumn("Zone##DialogDB_Config", ImGuiTableColumnFlags.WidthFixed, 100)
@@ -489,8 +511,12 @@ local function GUI_Main()
 				Dialog[serverName][tmpTarget] = {allzones = {}, [curZone] = {}}
 				newTarget = true
 			else
-				for z, zData in pairs(Dialog[serverName][tmpTarget]) do
-					for d, c in pairs(zData) do
+				-- Use sortedKeys to sort zones and then descriptions within zones
+				local sortedZones = sortedKeys(Dialog[serverName][tmpTarget])
+				for _, z in ipairs(sortedZones) do
+					local sortedDescriptions = sortedKeys(Dialog[serverName][tmpTarget][z])
+					for _, d in ipairs(sortedDescriptions) do
+						local c = Dialog[serverName][tmpTarget][z][d]
 						ImGui.TableNextRow()
 						ImGui.TableNextColumn()
 						ImGui.Text(tmpTarget)
@@ -525,7 +551,7 @@ local function GUI_Main()
 				mq.pickle(dialogData, Dialog)
 				ConfUI = false
 			end
-			ImGui.EndChild()
+			-- ImGui.EndChild()
 		end
 
 		if ImGui.Button("Add Dialog##DialogConfig") then
