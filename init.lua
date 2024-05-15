@@ -21,6 +21,7 @@ local CurrTarget = mq.TLO.Target.DisplayName() or 'None'
 local dialogData = mq.configDir ..'/npc_dialog.lua'
 local dialogConfig = mq.configDir ..'/DialogDB_Config.lua'
 local entries = {}
+local showCmds = true
 local Config = {
 	cmdGroup = cmdGroup,
 	cmdZone = cmdZone,
@@ -386,65 +387,71 @@ local function GUI_Main()
 					end
 					ImGui.EndCombo()
 				end
-				if _G["cmdString"] and _G["cmdString"] ~= '' then
-					ImGui.Separator()
-					if ImGui.Button('Say ##DialogDBCombined') then
-						if not DEBUG then
-							mq.cmdf("%s",  _G["cmdString"])
-						else
-							 printf("%s",  _G["cmdString"])
-						end
-											end
-					if mq.TLO.Me.GroupSize() > 1 then
-						ImGui.SameLine()
-						if ImGui.Button('Group Say ##DialogDBCombined') then
-							if cmdGroup:find("^/d") then
-								cmdGroup = cmdGroup.." "
-							end
+				ImGui.SameLine()
+				local eyeCon = showCmds and Icons.FA_CARET_UP or Icons.FA_CARET_DOWN
+				
+				if ImGui.Button(eyeCon) then showCmds = not showCmds end
+				if showCmds then
+					if _G["cmdString"] and _G["cmdString"] ~= '' then
+						ImGui.Separator()
+						if ImGui.Button('Say ##DialogDBCombined') then
 							if not DEBUG then
-								mq.cmdf("/multiline ; %s/target %s; /timed 5, %s%s",cmdGroup, CurrTarget,cmdGroup,_G["cmdString"])
+								mq.cmdf("%s",  _G["cmdString"])
 							else
-								 printf("/multiline ; %s/target %s; /timed 5, %s%s",cmdGroup, CurrTarget,cmdGroup,_G["cmdString"])
+								printf("%s",  _G["cmdString"])
 							end
-						end
-						ImGui.SameLine()
-						local tmpDelay = delay
-						ImGui.SetNextItemWidth(75)
-						tmpDelay = ImGui.InputInt("Delay##DialogDBCombined", tmpDelay, 1, 1)
-						if tmpDelay ~= delay then
-							delay = tmpDelay
-						end
-						if ImGui.Button('Group Say Delayed ##DialogDBCombined') then
-							local cDelay = delay * 10
-							for i = 1, mq.TLO.Me.GroupSize() - 1 do
-								local pName = mq.TLO.Group.Member(i).DisplayName()
-								if cmdChar:find("/bct") then
-									pName = pName.." /"
-								else
-									pName = pName.." "
+												end
+						if mq.TLO.Me.GroupSize() > 1 then
+							ImGui.SameLine()
+							if ImGui.Button('Group Say ##DialogDBCombined') then
+								if cmdGroup:find("^/d") then
+									cmdGroup = cmdGroup.." "
 								end
 								if not DEBUG then
-									mq.cmdf("/multiline ; %s %s/target %s; %s %s/timed %s, %s",cmdChar,pName, CurrTarget,cmdChar,pName ,cDelay, _G["cmdString"])
+									mq.cmdf("/multiline ; %s/target %s; /timed 5, %s%s",cmdGroup, CurrTarget,cmdGroup,_G["cmdString"])
 								else
-									 printf("/multiline ; %s %s/target %s; %s %s/timed %s, %s",cmdChar,pName, CurrTarget,cmdChar,pName ,cDelay,  _G["cmdString"])
+									printf("/multiline ; %s/target %s; /timed 5, %s%s",cmdGroup, CurrTarget,cmdGroup,_G["cmdString"])
 								end
-								cDelay = cDelay + (delay * 10)
 							end
-							if not DEBUG then
-								mq.cmdf("/timed %s, %s",cDelay, _G["cmdString"])
-							else
-								 printf("/timed %s, %s",cDelay, _G["cmdString"])
+							ImGui.SameLine()
+							local tmpDelay = delay
+							ImGui.SetNextItemWidth(75)
+							tmpDelay = ImGui.InputInt("Delay##DialogDBCombined", tmpDelay, 1, 1)
+							if tmpDelay ~= delay then
+								delay = tmpDelay
 							end
-						end
-						ImGui.SameLine()
-						if ImGui.Button('Zone Members ##DialogDBCombined') then
-							if cmdZone:find("^/d") then
-								cmdZone = cmdZone.." "
+							if ImGui.Button('Group Say Delayed ##DialogDBCombined') then
+								local cDelay = delay * 10
+								for i = 1, mq.TLO.Me.GroupSize() - 1 do
+									local pName = mq.TLO.Group.Member(i).DisplayName()
+									if cmdChar:find("/bct") then
+										pName = pName.." /"
+									else
+										pName = pName.." "
+									end
+									if not DEBUG then
+										mq.cmdf("/multiline ; %s %s/target %s; %s %s/timed %s, %s",cmdChar,pName, CurrTarget,cmdChar,pName ,cDelay, _G["cmdString"])
+									else
+										printf("/multiline ; %s %s/target %s; %s %s/timed %s, %s",cmdChar,pName, CurrTarget,cmdChar,pName ,cDelay,  _G["cmdString"])
+									end
+									cDelay = cDelay + (delay * 10)
+								end
+								if not DEBUG then
+									mq.cmdf("/timed %s, %s",cDelay, _G["cmdString"])
+								else
+									printf("/timed %s, %s",cDelay, _G["cmdString"])
+								end
 							end
-							if not DEBUG then
-								mq.cmdf("/multiline ; %s/target %s; /timed 5, %s%s",cmdZone, CurrTarget,cmdZone, _G["cmdString"])
-							else
-								 printf("/multiline ; %s/target %s; /timed 5, %s%s",cmdZone, CurrTarget,cmdZone, _G["cmdString"])
+							ImGui.SameLine()
+							if ImGui.Button('Zone Members ##DialogDBCombined') then
+								if cmdZone:find("^/d") then
+									cmdZone = cmdZone.." "
+								end
+								if not DEBUG then
+									mq.cmdf("/multiline ; %s/target %s; /timed 5, %s%s",cmdZone, CurrTarget,cmdZone, _G["cmdString"])
+								else
+									printf("/multiline ; %s/target %s; /timed 5, %s%s",cmdZone, CurrTarget,cmdZone, _G["cmdString"])
+								end
 							end
 						end
 					end
