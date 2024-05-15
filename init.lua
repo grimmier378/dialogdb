@@ -13,6 +13,7 @@ local cmdZone = '/dgza'
 local cmdChar = '/dex'
 local cmdSelf = '/say'
 local tmpDesc = ''
+local autoAdd = false
 local DEBUG, newTarget = false, false
 local tmpTarget = 'None'
 local eZone, eTar, eDes, eCmd, newCmd, newDesc = '', '', '', '', '', ''
@@ -25,6 +26,7 @@ local Config = {
 	cmdZone = cmdZone,
 	cmdChar = cmdChar,
 	cmdSelf = cmdSelf,
+	autoAdd = false
 }
 
 local winFlags = bit32.bor(ImGuiWindowFlags.NoCollapse, ImGuiWindowFlags.NoTitleBar, ImGuiWindowFlags.AlwaysAutoResize)
@@ -73,7 +75,7 @@ local function loadSettings()
 		Dialog = tmpDialog
 	end
 	if not File_Exists(dialogConfig) then
-		mq.pickle(dialogConfig, {cmdGroup = cmdGroup, cmdZone = cmdZone, cmdChar = cmdChar, cmdSelf = cmdSelf})
+		mq.pickle(dialogConfig, {cmdGroup = cmdGroup, cmdZone = cmdZone, cmdChar = cmdChar, autoAdd = autoAdd, cmdSelf = cmdSelf})
 		ConfUI = true
 		tmpTarget = 'None'
 	else
@@ -82,6 +84,7 @@ local function loadSettings()
 		cmdZone = Config.cmdZone
 		cmdChar = Config.cmdChar
 		cmdSelf = Config.cmdSelf
+		autoAdd = Config.autoAdd
 	end
 
 	--- Ensure that the command is a '/'' command otherwise add '/say ' to the front of it
@@ -114,6 +117,38 @@ local function printHelp()
 	printf("%s\ay/dialogdb config \aoDisplay Config Window",msgPref)
 	printf("%s\ay/dialogdb debug \aoToggles Debugging, Turns off Commands and Prints them out so you can verify them",msgPref)
 end	
+
+local function eventNPC(line,who)
+	if not autoAdd then return end
+	local check = string.format("npc= %s",who)
+	if mq.TLO.SpawnCount(check) == nil then return end
+	local found = false
+	if Dialog[serverName][who] == nil then
+		Dialog[serverName][who] = {}
+		Dialog[serverName][who][curZone] = {}
+		Dialog[serverName][who]['allzones'] = {}
+	end
+	for w in string.gmatch(line, "%[(.-)%].") do
+		if Dialog[serverName][who][curZone][w] == nil then
+			Dialog[serverName][who][curZone][w] = w
+			found = true
+		end
+	end
+	if found then
+		mq.pickle(dialogData, Dialog)
+		Dialog = dofile(dialogData)
+	end
+end
+
+local function setEvents()
+	if autoAdd then
+		mq.event("npc_say1", '#1# say#*#[#*#]#*#', eventNPC)
+		mq.event("npc_whisper2", '#1# whisper#*#[#*#]#*#', eventNPC)
+	else
+		mq.unevent("npc_say1")
+		mq.unevent("npc_whisper2")
+	end
+end
 
 local function checkDialog()
 	hasDialog = false
@@ -553,7 +588,14 @@ local function GUI_Main()
 			end
 			-- ImGui.EndChild()
 		end
-
+		local tmpTxtAuto = autoAdd and "Disable Auto Add" or "Enable Auto Add"
+		if ImGui.Button(tmpTxtAuto.."##DialogConfigAutoAdd") then
+			autoAdd = not autoAdd
+			Config.autoAdd = autoAdd
+			mq.pickle(dialogConfig, Config)
+			setEvents()
+		end
+		ImGui.SameLine()
 		if ImGui.Button("Add Dialog##DialogConfig") then
 			if Dialog[serverName][tmpTarget] == nil then
 				Dialog[serverName][tmpTarget] = {allzones = {}, [curZone] = {}}
@@ -586,6 +628,7 @@ local function GUI_Main()
 		local openE, showE = ImGui.Begin("Edit Dialog##Dialog_Edit", true, ImGuiWindowFlags.NoCollapse)
 		if not openE then
 			editGUI = false
+			entries = {}
 		end
 		if not showE then
 			ImGui.End()
@@ -599,6 +642,7 @@ local function init()
 	if mq.TLO.MacroQuest.BuildName() ~= 'Emu' then serverName = 'Live' end -- really only care about server name for EMU as the dialogs may vary from serever to server to server
 	loadSettings()
 	Running = true
+	setEvents()
 	mq.bind('/dialogdb', bind)
 	mq.imgui.init("Npc Dialog", GUI_Main)
 	printHelp()
@@ -623,7 +667,8 @@ local function mainLoop()
 			ShowDialog = false
 			if CurrTarget ~= mq.TLO.Target.DisplayName() then tmpDesc = '' end
 		end
-		mq.delay(1000)
+		mq.doevents()
+		mq.delay(10)
 	end
 	mq.exit()
 end
