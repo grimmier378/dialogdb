@@ -134,14 +134,13 @@ local function eventNPC(line,who)
 	if mq.TLO.SpawnCount(check)() == 0 then return end
 	-- printf("%s",mq.TLO.SpawnCount(check)())
 	if not line:find("^"..nName) then return end
-	if Dialog[serverName][nName] == nil then
-		Dialog[serverName][nName] = {}
-		Dialog[serverName][nName][curZone] = {}
-		Dialog[serverName][nName]['allzones'] = {}
-	end
+
 	for w in string.gmatch(line, "%[(.-)%]") do
 		if w ~= nil then
-			if not Dialog[serverName][nName][curZone][w] then
+			if Dialog[serverName][nName] == nil then Dialog[serverName][nName] = {} end
+			if Dialog[serverName][nName][curZone] == nil then Dialog[serverName][nName][curZone] = {} end
+			if Dialog[serverName][nName]['allzones'] == nil	then Dialog[serverName][nName]['allzones'] = {} end
+			if Dialog[serverName][nName][curZone][w] == nil then
 				Dialog[serverName][nName][curZone][w] =  w
 				found = true
 			end
