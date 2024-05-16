@@ -101,7 +101,7 @@ local function loadSettings()
 		end
 	end
 	mq.pickle(dialogData, Dialog)
-	printf("Dialog Data Loaded for %s",serverName)
+	
 end
 
 local function printHelp()
@@ -121,23 +121,30 @@ end
 
 local function eventNPC(line,who)
 	if not autoAdd then return end
-	local tmpCheck = string.format("%s", mq.TLO.Target.DisplayName())
+	local nName = mq.TLO.Target.DisplayName() or 'None'
+	local tmpCheck = mq.TLO.Target.DisplayName() or 'None'
 	if who:find("^"..tmpCheck) or line:find("^"..tmpCheck) then
-		who = mq.TLO.Target.DisplayName()
+		nName = tmpCheck
 	end
-	print(who)
-	local check = string.format("npc =%s",who)
-	if mq.TLO.SpawnCount(check) == nil then return end
+	-- print(tmpCheck)
+	-- print(who)
 	local found = false
-	if Dialog[serverName][who] == nil then
-		Dialog[serverName][who] = {}
-		Dialog[serverName][who][curZone] = {}
-		Dialog[serverName][who]['allzones'] = {}
+	-- print(nName)
+	local check = string.format("npc =%s",nName)
+	if mq.TLO.SpawnCount(check)() == 0 then return end
+	-- printf("%s",mq.TLO.SpawnCount(check)())
+	if not line:find("^"..nName) then return end
+	if Dialog[serverName][nName] == nil then
+		Dialog[serverName][nName] = {}
+		Dialog[serverName][nName][curZone] = {}
+		Dialog[serverName][nName]['allzones'] = {}
 	end
 	for w in string.gmatch(line, "%[(.-)%]") do
-		if Dialog[serverName][who][curZone][w] == nil then
-			Dialog[serverName][who][curZone][w] =  w
-			found = true
+		if w ~= nil then
+			if not Dialog[serverName][nName][curZone][w] then
+				Dialog[serverName][nName][curZone][w] =  w
+				found = true
+			end
 		end
 	end
 	if found then
@@ -425,6 +432,7 @@ local function GUI_Main()
 							local tmpDelay = delay
 							ImGui.SetNextItemWidth(75)
 							tmpDelay = ImGui.InputInt("Delay##DialogDBCombined", tmpDelay, 1, 1)
+							if tmpDelay < 0 then tmpDelay = 0 end
 							if tmpDelay ~= delay then
 								delay = tmpDelay
 							end
@@ -649,6 +657,7 @@ end
 local function init()
 	if mq.TLO.MacroQuest.BuildName() ~= 'Emu' then serverName = 'Live' end -- really only care about server name for EMU as the dialogs may vary from serever to server to server
 	loadSettings()
+	printf("Dialog Data Loaded for %s",serverName)
 	Running = true
 	setEvents()
 	mq.bind('/dialogdb', bind)
