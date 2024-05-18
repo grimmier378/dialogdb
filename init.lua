@@ -1,18 +1,23 @@
 local mq = require('mq')
 local ImGui = require('ImGui')
 Icons = require('mq.ICONS')
+local LoadTheme = require('lib.theme_loader')
+local themeID = 1
+local theme = {}
+local themeFile = string.format('%s/MyThemeZ.lua', mq.configDir)
 local gIcon = Icons.MD_SETTINGS
 local Running = false
 local hasDialog = false
 local Dialog = require('npc_dialog')
 local curZone = mq.TLO.Zone.ShortName() or 'None'
 local serverName = mq.TLO.EverQuest.Server()
-local ShowDialog, ConfUI, editGUI = false, false, false
+local ShowDialog, ConfUI, editGUI, themeGUI = false, false, false, false
 local cmdGroup = '/dgae'
 local cmdZone = '/dgza'
 local cmdChar = '/dex'
 local cmdSelf = '/say'
 local tmpDesc = ''
+local themeName = 'Default'
 local autoAdd = false
 local DEBUG, newTarget = false, false
 local tmpTarget = 'None'
@@ -52,6 +57,22 @@ local function fixEnding(var)
 	return var
 end
 
+local function loadTheme()
+	if File_Exists(themeFile) then
+		theme = dofile(themeFile)
+		else
+		theme = require('themes') -- your local themes file incase the user doesn't have one in config folder
+	end
+	themeName = theme.LoadTheme or 'Default'
+		if theme and theme.Theme then
+			for tID, tData in pairs(theme.Theme) do
+				if tData['Name'] == themeName then
+					themeID = tID
+				end
+			end
+		end
+end
+
 local function loadSettings()
 	-- Check if the dialog data file exists
 	if not File_Exists(dialogData) then
@@ -87,6 +108,8 @@ local function loadSettings()
 		cmdSelf = Config.cmdSelf
 		autoAdd = Config.autoAdd
 	end
+	loadTheme()
+
 
 	--- Ensure that the command is a '/'' command otherwise add '/say ' to the front of it
 	for server,sData in pairs(Dialog) do
@@ -361,21 +384,29 @@ local function EditGUI(server, target, zone, desc, cmd)
 	ImGui.EndChild()
 
 end
+
 local inputText = ""
 local function GUI_Main()
 	--- Dialog Main Window
 	if ShowDialog then
+		local ColorCount, StyleCount = LoadTheme.StartTheme(theme.Theme[themeID])
 		local open, show = ImGui.Begin("NPC Dialog##Dialog_Main", true, winFlags)
 		if not show then
+			LoadTheme.EndTheme(ColorCount, StyleCount)
 			ImGui.End()
 		end
 
 		if checkDialog() then
+			ImGui.PushID('theme')
 			ImGui.Text(gIcon)
+			ImGui.PopID()
 			if ImGui.IsItemHovered() then
 				if ImGui.IsMouseReleased(0) then
 					ConfUI = not ConfUI
 					tmpTarget = CurrTarget
+				end
+				if ImGui.IsMouseReleased(1) then
+					themeGUI = not themeGUI
 				end
 			end
 			ImGui.SameLine()
@@ -473,6 +504,7 @@ local function GUI_Main()
 				end
 			end
 		end
+		LoadTheme.EndTheme(ColorCount, StyleCount)
 		ImGui.End()
 	end
 	
@@ -482,6 +514,7 @@ local function GUI_Main()
 			tmpTarget = CurrTarget
 		end
 		ImGui.SetNextWindowSize(580,350, ImGuiCond.Appearing)
+		local ColorCountConf, StyleCountConf = LoadTheme.StartTheme(theme.Theme[themeID])
 		local openC, showC = ImGui.Begin("NPC Dialog Config##Dialog_Config", true, ImGuiWindowFlags.NoCollapse)
 		if not openC then
 			if newTarget then
@@ -492,6 +525,7 @@ local function GUI_Main()
 			tmpTarget = 'None'
 		end
 		if not showC then
+			LoadTheme.EndTheme(ColorCountConf, StyleCountConf)
 			ImGui.End()
 		end
 		local tmpGpCmd = cmdGroup:gsub(" $","") or ''
@@ -538,6 +572,9 @@ local function GUI_Main()
 			mq.pickle(dialogConfig, Config)
 		end
 		ImGui.EndTable()
+		if ImGui.Button("Select Theme##DialogConfig") then
+			themeGUI = not themeGUI
+		end
 		ImGui.Separator()
 		--- Dialog Config Table
 		if tmpTarget ~= nil and tmpTarget ~= 'None' then
@@ -635,20 +672,59 @@ local function GUI_Main()
 		if ImGui.Button("Close##DialogConf_Close") then
 			ConfUI = false
 		end
+		LoadTheme.EndTheme(ColorCountConf, StyleCountConf)
 		ImGui.End()
 	end
 
 	--- Dialog Edit Window
 	if editGUI then
+		local ColorCountEdit, StyleCountEdit = LoadTheme.StartTheme(theme.Theme[themeID])
 		local openE, showE = ImGui.Begin("Edit Dialog##Dialog_Edit", true, ImGuiWindowFlags.NoCollapse)
 		if not openE then
 			editGUI = false
 			entries = {}
 		end
 		if not showE then
+			LoadTheme.EndTheme(ColorCountEdit, StyleCountEdit)
 			ImGui.End()
 		end
 		EditGUI(serverName,eTar,eZone,eDes,eCmd)
+		LoadTheme.EndTheme(ColorCountEdit, StyleCountEdit)
+		ImGui.End()
+	end
+
+	--- Theme Selector Window
+	if themeGUI then
+		local ColorCountTheme, StyleCountTheme = LoadTheme.StartTheme(theme.Theme[themeID])
+		local openTheme, showTheme = ImGui.Begin('Theme Selector##DialogDB',true,ImGuiWindowFlags.NoCollapse)
+		if not openTheme then
+			themeGUI = false
+		end
+		if not showTheme then
+			LoadTheme.EndTheme(ColorCountTheme, StyleCountTheme)
+			ImGui.End()
+		end
+		ImGui.SeparatorText("Theme##DialogDB")
+		
+		ImGui.Text("Cur Theme: %s", themeName)
+		-- Combo Box Load Theme
+		if ImGui.BeginCombo("Load Theme##DialogDB", themeName) then
+		
+			for k, data in pairs(theme.Theme) do
+				local isSelected = data.Name == themeName
+				if ImGui.Selectable(data.Name, isSelected) then
+					theme.LoadTheme = data.Name
+					themeID = k
+					themeName = theme.LoadTheme
+				end
+			end
+			ImGui.EndCombo()
+		end
+		
+		if ImGui.Button('Reload Theme File') then
+			loadTheme()
+		end
+		LoadTheme.EndTheme(ColorCountTheme, StyleCountTheme)
 		ImGui.End()
 	end
 end
