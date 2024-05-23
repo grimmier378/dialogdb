@@ -28,6 +28,7 @@ local dialogConfig = mq.configDir ..'/DialogDB_Config.lua'
 local entries = {}
 local showCmds = true
 local showHelp = false
+local ME = mq.TLO.Me.Name()
 local Config = {
 	cmdGroup = cmdGroup,
 	cmdZone = cmdZone,
@@ -392,9 +393,8 @@ local inputText = ""
 local function GUI_Main()
 	--- Dialog Main Window
 	if ShowDialog then
-		-- local show = false
 		local ColorCount, StyleCount = LoadTheme.StartTheme(theme.Theme[themeID])
-		local openMain, showMain = ImGui.Begin("NPC Dialog##Dialog_Main_"..mq.TLO.Me.Name(), true, winFlags)
+		local openMain, showMain = ImGui.Begin("NPC Dialog##DialogDB_Main_"..ME, true, winFlags)
 		if not openMain then
 			ShowDialog = false
 		end
@@ -440,7 +440,7 @@ local function GUI_Main()
 					end
 					ImGui.SameLine()
 					local eyeCon = showCmds and Icons.FA_CARET_UP or Icons.FA_CARET_DOWN
-					
+
 					if ImGui.Button(eyeCon) then showCmds = not showCmds end
 					if showCmds then
 						if _G["cmdString"] and _G["cmdString"] ~= '' then
@@ -522,7 +522,7 @@ local function GUI_Main()
 		end
 		ImGui.SetNextWindowSize(580,350, ImGuiCond.Appearing)
 		local ColorCountConf, StyleCountConf = LoadTheme.StartTheme(theme.Theme[themeID])
-		local openC, showC = ImGui.Begin("NPC Dialog Config##Dialog_Config", true, ImGuiWindowFlags.NoCollapse)
+		local openC, showC = ImGui.Begin("NPC Dialog Config##Dialog_Config_"..ME, true, ImGuiWindowFlags.NoCollapse)
 		if not openC then
 			if newTarget then
 				Dialog[serverName][tmpTarget] = nil
@@ -687,7 +687,7 @@ local function GUI_Main()
 	--- Dialog Edit Window
 	if editGUI then
 		local ColorCountEdit, StyleCountEdit = LoadTheme.StartTheme(theme.Theme[themeID])
-		local openE, showE = ImGui.Begin("Edit Dialog##Dialog_Edit", true, ImGuiWindowFlags.NoCollapse)
+		local openE, showE = ImGui.Begin("Edit Dialog##Dialog_Edit_"..ME, true, ImGuiWindowFlags.NoCollapse)
 		if not openE then
 			editGUI = false
 			entries = {}
@@ -705,7 +705,7 @@ local function GUI_Main()
 	--- Theme Selector Window
 	if themeGUI then
 		local ColorCountTheme, StyleCountTheme = LoadTheme.StartTheme(theme.Theme[themeID])
-		local openTheme, showTheme = ImGui.Begin('Theme Selector##DialogDB',true,bit32.bor(ImGuiWindowFlags.NoCollapse, ImGuiWindowFlags.AlwaysAutoResize))
+		local openTheme, showTheme = ImGui.Begin('Theme Selector##DialogDB_'..ME,true,bit32.bor(ImGuiWindowFlags.NoCollapse, ImGuiWindowFlags.AlwaysAutoResize))
 		if not openTheme then
 			themeGUI = false
 		end
@@ -741,7 +741,7 @@ local function GUI_Main()
 	-- help window
 	if showHelp then
 		ImGui.SetNextWindowSize(600, 350, ImGuiCond.Appearing)
-		local openHelpWin, showHelpWin = ImGui.Begin('Help##DialogDB', true, bit32.bor(ImGuiWindowFlags.NoCollapse))	
+		local openHelpWin, showHelpWin = ImGui.Begin("Help##DialogDB_"..ME, true, bit32.bor(ImGuiWindowFlags.NoCollapse))	
 		if not openHelpWin then
 			showHelp = false
 		end
@@ -811,6 +811,7 @@ end
 
 local function mainLoop()
 	while Running do
+		if mq.TLO.MacroQuest.GameState() ~= "INGAME" then mq.exit() end
 		if mq.TLO.Me.Zoning() then
 			tmpDesc = ''
 			CurrTarget = 'None'
