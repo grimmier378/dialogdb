@@ -12,7 +12,7 @@ local Dialog = require('npc_dialog')
 local curZone = mq.TLO.Zone.ShortName() or 'None'
 local serverName = mq.TLO.EverQuest.Server()
 local ShowDialog, ConfUI, editGUI, themeGUI = false, false, false, false
-local cmdGroup = '/dgae'
+local cmdGroup = '/dgge'
 local cmdZone = '/dgza'
 local cmdChar = '/dex'
 local cmdSelf = '/say'
@@ -394,10 +394,8 @@ local function GUI_Main()
 	if ShowDialog then
 		-- local show = false
 		local ColorCount, StyleCount = LoadTheme.StartTheme(theme.Theme[themeID])
-		local openMain, showMain = ImGui.Begin("NPC Dialog##Dialog_Main", true, winFlags)
+		local openMain, showMain = ImGui.Begin("NPC Dialog##Dialog_Main_"..mq.TLO.Me.Name(), true, winFlags)
 		if not openMain then
-			LoadTheme.EndTheme(ColorCount, StyleCount)
-			ImGui.End()
 			ShowDialog = false
 		end
 		if not showMain then
