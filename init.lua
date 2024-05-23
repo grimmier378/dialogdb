@@ -396,6 +396,8 @@ local function GUI_Main()
 		local ColorCount, StyleCount = LoadTheme.StartTheme(theme.Theme[themeID])
 		local openMain, showMain = ImGui.Begin("NPC Dialog##Dialog_Main", true, winFlags)
 		if not openMain then
+			LoadTheme.EndTheme(ColorCount, StyleCount)
+			ImGui.End()
 			ShowDialog = false
 		end
 		if not showMain then
