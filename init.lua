@@ -29,6 +29,8 @@ local entries = {}
 local showCmds = true
 local showHelp = false
 local ME = mq.TLO.Me.Name()
+local inputText = ""
+
 local Config = {
 	cmdGroup = cmdGroup,
 	cmdZone = cmdZone,
@@ -327,7 +329,19 @@ local function handleCombinedDialog()
 	return combinedTable
 end
 
-local function EditGUI(server, target, zone, desc, cmd)
+local function DrawEditWin(server, target, zone, desc, cmd)
+	local ColorCountEdit, StyleCountEdit = LoadTheme.StartTheme(theme.Theme[themeID])
+	local openE, showE = ImGui.Begin("Edit Dialog##Dialog_Edit_"..ME, true, ImGuiWindowFlags.NoCollapse)
+	if not openE then
+		editGUI = false
+		entries = {}
+	end
+	if not showE then
+		LoadTheme.EndTheme(ColorCountEdit, StyleCountEdit)
+		ImGui.End()
+		return
+	end
+
 	if #entries == 0 then
 		table.insert(entries, {desc = desc, cmd = cmd})
 	end
@@ -387,414 +401,418 @@ local function EditGUI(server, target, zone, desc, cmd)
 	end
 	ImGui.EndChild()
 
+	LoadTheme.EndTheme(ColorCountEdit, StyleCountEdit)
+	ImGui.End()
 end
 
-local inputText = ""
-local function GUI_Main()
-	--- Dialog Main Window
-	if ShowDialog then
-		local ColorCount, StyleCount = LoadTheme.StartTheme(theme.Theme[themeID])
-		local openMain, showMain = ImGui.Begin("NPC Dialog##DialogDB_Main_"..ME, true, winFlags)
-		if not openMain then
-			ShowDialog = false
+local function DrawConfigWin()
+	if tmpTarget == 'None' then
+		tmpTarget = CurrTarget
+	end
+	ImGui.SetNextWindowSize(580,350, ImGuiCond.Appearing)
+	local ColorCountConf, StyleCountConf = LoadTheme.StartTheme(theme.Theme[themeID])
+	local openC, showC = ImGui.Begin("NPC Dialog Config##Dialog_Config_"..ME, true, ImGuiWindowFlags.NoCollapse)
+	if not openC then
+		if newTarget then
+			Dialog[serverName][tmpTarget] = nil
+			newTarget = false
 		end
-		if not showMain then
-			LoadTheme.EndTheme(ColorCount, StyleCount)
-			ImGui.End()
-		else
-			if checkDialog() then
-				ImGui.PushID('theme')
-				ImGui.Text(gIcon)
-				ImGui.PopID()
-				if ImGui.IsItemHovered() then
-					if ImGui.IsMouseReleased(0) then
-						ConfUI = not ConfUI
-						tmpTarget = CurrTarget
-					end
-					if ImGui.IsMouseReleased(1) then
-						themeGUI = not themeGUI
-					end
-				end
-				ImGui.SameLine()
-				ImGui.Text("%s's Dialog", CurrTarget)
-				local dialogCombined = handleCombinedDialog()
-				if next(dialogCombined) ~= nil then
+		ConfUI = false
+		tmpTarget = 'None'
+	end
+	if not showC then
+		LoadTheme.EndTheme(ColorCountConf, StyleCountConf)
+		ImGui.End()
+		return
+	end
+	local tmpGpCmd = cmdGroup:gsub(" $","") or ''
+	local tmpZnCmd = cmdZone:gsub(" $","") or ''
+	local tmpChCmd = cmdChar:gsub(" $","") or ''
+	local tmpSlCmd = cmdSelf:gsub(" $","") or ''
 
-					local sortedKeyList = sortedKeys(dialogCombined)
-					if dialogCombined[tmpDesc] == nil then
-						tmpDesc = 'None'
-					end
-					ImGui.SetNextItemWidth(200)
-					if ImGui.BeginCombo("##DialogDBCombined", tmpDesc) then
-						for _, desc in pairs(sortedKeyList) do
-							local isSelected = (desc == tmpDesc)
-							if ImGui.Selectable(desc, isSelected) then
-								tmpDesc = desc
-								_G["cmdString"] = dialogCombined[desc] -- Global to maintain state outside of this function
-							end
-							if isSelected then
-								ImGui.SetItemDefaultFocus()
-							end
-						end
-						ImGui.EndCombo()
+	ImGui.SeparatorText("Command's Config")
+
+	ImGui.BeginTable("Command Config##DialogConfigTable", 2, ImGuiTableFlags.Borders)
+	ImGui.TableSetupColumn("##DialogConfigCol1", ImGuiTableColumnFlags.WidthFixed, 380)
+	ImGui.TableSetupColumn("##DialogConfigCol2", ImGuiTableColumnFlags.WidthStretch)
+	ImGui.TableNextRow()
+	ImGui.TableNextColumn()
+	tmpGpCmd, _ = ImGui.InputText("Group Command##DialogConfig", tmpGpCmd)
+	if tmpGpCmd ~= cmdGroup then
+		cmdGroup = tmpGpCmd:gsub(" $","")
+	end
+	ImGui.TableNextColumn()
+	if ImGui.Button("Set Group Command##DialogConfig") then
+		Config.cmdGroup = tmpGpCmd:gsub(" $","")
+		mq.pickle(dialogConfig, Config)
+	end
+	ImGui.TableNextRow()
+	ImGui.TableNextColumn()
+	tmpZnCmd, _ = ImGui.InputText("Zone Command##DialogConfig", tmpZnCmd)	
+	if tmpZnCmd ~= cmdZone then
+		cmdZone = tmpZnCmd:gsub(" $","")
+	end
+	ImGui.TableNextColumn()
+	if ImGui.Button("Set Zone Command##DialogConfig") then
+		Config.cmdZone = tmpZnCmd:gsub(" $","")
+		mq.pickle(dialogConfig, Config)
+	end
+	ImGui.TableNextRow()
+	ImGui.TableNextColumn()
+	tmpChCmd, _ = ImGui.InputText("Character Command##DialogConfig", tmpChCmd)
+	if tmpChCmd ~= cmdChar then
+		cmdChar = tmpChCmd:gsub(" $","")
+	end
+	ImGui.TableNextColumn()
+	if ImGui.Button("Set Character Command##DialogConfig") then
+		Config.cmdChar = tmpChCmd:gsub(" $","")
+		mq.pickle(dialogConfig, Config)
+	end
+	ImGui.EndTable()
+	if ImGui.Button("Select Theme##DialogConfig") then
+		themeGUI = not themeGUI
+	end
+	ImGui.Separator()
+	--- Dialog Config Table
+	if tmpTarget ~= nil and tmpTarget ~= 'None' then
+		local sizeX, sizeY = ImGui.GetContentRegionAvail()
+		ImGui.SeparatorText(tmpTarget.."'s Dialogs")
+		-- ImGui.BeginChild("DialogConfigChild", sizeX, sizeY -30, bit32.bor(ImGuiChildFlags.Border))
+		ImGui.BeginTable("NPC Dialogs##DialogConfigTable2", 5, bit32.bor(ImGuiTableFlags.Borders,ImGuiTableFlags.ScrollY),ImVec2(sizeX,sizeY-80))
+		ImGui.TableSetupScrollFreeze(0, 1)
+		ImGui.TableSetupColumn("NPC##DialogDB_Config", ImGuiTableColumnFlags.WidthFixed, 100)
+		ImGui.TableSetupColumn("Zone##DialogDB_Config", ImGuiTableColumnFlags.WidthFixed, 100)
+		ImGui.TableSetupColumn("Description##DialogDB_Config", ImGuiTableColumnFlags.WidthStretch, 100)
+		ImGui.TableSetupColumn("Trigger##DialogDB_Config", ImGuiTableColumnFlags.WidthStretch, 100)
+		ImGui.TableSetupColumn("##DialogDB_Config_Save", ImGuiTableColumnFlags.WidthFixed, 120)
+		ImGui.TableHeadersRow()
+		local id = 1
+		if Dialog[serverName][tmpTarget] == nil then
+			Dialog[serverName][tmpTarget] = {allzones = {}, [curZone] = {}}
+			newTarget = true
+		else
+			-- Use sortedKeys to sort zones and then descriptions within zones
+			local sortedZones = sortedKeys(Dialog[serverName][tmpTarget])
+			for _, z in ipairs(sortedZones) do
+				local sortedDescriptions = sortedKeys(Dialog[serverName][tmpTarget][z])
+				for _, d in ipairs(sortedDescriptions) do
+					local c = Dialog[serverName][tmpTarget][z][d]
+					ImGui.TableNextRow()
+					ImGui.TableNextColumn()
+					ImGui.Text(tmpTarget)
+					ImGui.TableNextColumn()
+					ImGui.Text(z)
+					ImGui.TableNextColumn()
+					ImGui.Text(d)
+					ImGui.TableNextColumn()
+					ImGui.Text(c)
+					ImGui.TableNextColumn()
+					if ImGui.Button("Edit##DialogDB_Config_Edit_"..id) then
+						eZone = z
+						eTar = tmpTarget
+						eDes = d
+						eCmd = c
+						newCmd = c
+						newDesc = d
+						editGUI = true
 					end
 					ImGui.SameLine()
-					local eyeCon = showCmds and Icons.FA_CARET_UP or Icons.FA_CARET_DOWN
-
-					if ImGui.Button(eyeCon) then showCmds = not showCmds end
-					if showCmds then
-						if _G["cmdString"] and _G["cmdString"] ~= '' then
-							ImGui.Separator()
-							if ImGui.Button('Say ##DialogDBCombined') then
-								if not DEBUG then
-									mq.cmdf("%s",  _G["cmdString"])
-								else
-									printf("%s",  _G["cmdString"])
-								end
-													end
-							if mq.TLO.Me.GroupSize() > 1 then
-								ImGui.SameLine()
-								if ImGui.Button('Group Say ##DialogDBCombined') then
-									if cmdGroup:find("^/d") then
-										cmdGroup = cmdGroup.." "
-									end
-									if not DEBUG then
-										mq.cmdf("/multiline ; %s/target %s; /timed 5, %s%s",cmdGroup, CurrTarget,cmdGroup,_G["cmdString"])
-									else
-										printf("/multiline ; %s/target %s; /timed 5, %s%s",cmdGroup, CurrTarget,cmdGroup,_G["cmdString"])
-									end
-								end
-								ImGui.SameLine()
-								local tmpDelay = delay
-								ImGui.SetNextItemWidth(75)
-								tmpDelay = ImGui.InputInt("Delay##DialogDBCombined", tmpDelay, 1, 1)
-								if tmpDelay < 0 then tmpDelay = 0 end
-								if tmpDelay ~= delay then
-									delay = tmpDelay
-								end
-								if ImGui.Button('Group Say Delayed ##DialogDBCombined') then
-									local cDelay = delay * 10
-									for i = 1, mq.TLO.Me.GroupSize() - 1 do
-										local pName = mq.TLO.Group.Member(i).DisplayName()
-										if cmdChar:find("/bct") then
-											pName = pName.." /"
-										else
-											pName = pName.." "
-										end
-										if not DEBUG then
-											mq.cmdf("/multiline ; %s %s/target %s; %s %s/timed %s, %s",cmdChar,pName, CurrTarget,cmdChar,pName ,cDelay, _G["cmdString"])
-										else
-											printf("/multiline ; %s %s/target %s; %s %s/timed %s, %s",cmdChar,pName, CurrTarget,cmdChar,pName ,cDelay,  _G["cmdString"])
-										end
-										cDelay = cDelay + (delay * 10)
-									end
-									if not DEBUG then
-										mq.cmdf("/timed %s, %s",cDelay, _G["cmdString"])
-									else
-										printf("/timed %s, %s",cDelay, _G["cmdString"])
-									end
-								end
-								ImGui.SameLine()
-								if ImGui.Button('Zone Members ##DialogDBCombined') then
-									if cmdZone:find("^/d") then
-										cmdZone = cmdZone.." "
-									end
-									if not DEBUG then
-										mq.cmdf("/multiline ; %s/target %s; /timed 5, %s%s",cmdZone, CurrTarget,cmdZone, _G["cmdString"])
-									else
-										printf("/multiline ; %s/target %s; /timed 5, %s%s",cmdZone, CurrTarget,cmdZone, _G["cmdString"])
-									end
-								end
-							end
-						end
+					if ImGui.Button("Delete##DialogDB_Config_"..id) then
+						Dialog[serverName][tmpTarget][z][d] = nil
+						mq.pickle(dialogData, Dialog)
 					end
+					id = id + 1
 				end
 			end
-			LoadTheme.EndTheme(ColorCount, StyleCount)
-			ImGui.End()
 		end
-	end
-
-	--- Dialog Config Window
-	if ConfUI then
-		if tmpTarget == 'None' then
-			tmpTarget = CurrTarget
-		end
-		ImGui.SetNextWindowSize(580,350, ImGuiCond.Appearing)
-		local ColorCountConf, StyleCountConf = LoadTheme.StartTheme(theme.Theme[themeID])
-		local openC, showC = ImGui.Begin("NPC Dialog Config##Dialog_Config_"..ME, true, ImGuiWindowFlags.NoCollapse)
-		if not openC then
-			if newTarget then
-				Dialog[serverName][tmpTarget] = nil
-				newTarget = false
-			end
+		ImGui.EndTable()
+		if ImGui.Button("Delete NPC##DialogConfig") then
+			Dialog[serverName][tmpTarget] = nil
+			mq.pickle(dialogData, Dialog)
 			ConfUI = false
-			tmpTarget = 'None'
 		end
-		if not showC then
-			LoadTheme.EndTheme(ColorCountConf, StyleCountConf)
-			ImGui.End()
-		else
-			local tmpGpCmd = cmdGroup:gsub(" $","") or ''
-			local tmpZnCmd = cmdZone:gsub(" $","") or ''
-			local tmpChCmd = cmdChar:gsub(" $","") or ''
-			local tmpSlCmd = cmdSelf:gsub(" $","") or ''
+		-- ImGui.EndChild()
+	end
+	local tmpTxtAuto = autoAdd and "Disable Auto Add" or "Enable Auto Add"
+	if ImGui.Button(tmpTxtAuto.."##DialogConfigAutoAdd") then
+		autoAdd = not autoAdd
+		Config.autoAdd = autoAdd
+		mq.pickle(dialogConfig, Config)
+		setEvents()
+	end
+	ImGui.SameLine()
+	if ImGui.Button("Add Dialog##DialogConfig") then
+		if Dialog[serverName][tmpTarget] == nil then
+			Dialog[serverName][tmpTarget] = {allzones = {}, [curZone] = {}}
+		end
+		eZone = curZone
+		eTar = tmpTarget
+		eDes = "NEW"
+		eCmd = "NEW"
+		newCmd = "NEW"
+		newDesc = "NEW"
+		editGUI = true
+	end
+	ImGui.SameLine()
+	if ImGui.Button("Refresh Target##DialogConf_Refresh") then
+		tmpTarget = mq.TLO.Target.DisplayName()
+	end
+	ImGui.SameLine()
+	if ImGui.Button("Cancel##DialogConf_Cancel") then
+		if newTarget then
+			Dialog[serverName][tmpTarget] = nil
+			newTarget = false
+		end
+		ConfUI = false
+	end
+	ImGui.SameLine()
+	if ImGui.Button("Close##DialogConf_Close") then
+		ConfUI = false
+	end
+	LoadTheme.EndTheme(ColorCountConf, StyleCountConf)
+	ImGui.End()
+	
+end
 
-			ImGui.SeparatorText("Command's Config")
+local function DrawThemeWin()
+	local ColorCountTheme, StyleCountTheme = LoadTheme.StartTheme(theme.Theme[themeID])
+	local openTheme, showTheme = ImGui.Begin('Theme Selector##DialogDB_'..ME,true,bit32.bor(ImGuiWindowFlags.NoCollapse, ImGuiWindowFlags.AlwaysAutoResize))
+	if not openTheme then
+		themeGUI = false
+	end
+	if not showTheme then
+		LoadTheme.EndTheme(ColorCountTheme, StyleCountTheme)
+		ImGui.End()
+		return
+	end
+	ImGui.SeparatorText("Theme##DialogDB")
+			
+	ImGui.Text("Cur Theme: %s", themeName)
+	-- Combo Box Load Theme
+	if ImGui.BeginCombo("Load Theme##DialogDB", themeName) then
+			
+		for k, data in pairs(theme.Theme) do
+			local isSelected = data.Name == themeName
+			if ImGui.Selectable(data.Name, isSelected) then
+				theme.LoadTheme = data.Name
+				themeID = k
+				themeName = theme.LoadTheme
+			end
+		end
+		ImGui.EndCombo()
+	end
+			
+	if ImGui.Button('Reload Theme File') then
+		loadTheme()
+	end
+	LoadTheme.EndTheme(ColorCountTheme, StyleCountTheme)
+	ImGui.End()
+end
 
-			ImGui.BeginTable("Command Config##DialogConfigTable", 2, ImGuiTableFlags.Borders)
-			ImGui.TableSetupColumn("##DialogConfigCol1", ImGuiTableColumnFlags.WidthFixed, 380)
-			ImGui.TableSetupColumn("##DialogConfigCol2", ImGuiTableColumnFlags.WidthStretch)
-			ImGui.TableNextRow()
-			ImGui.TableNextColumn()
-			tmpGpCmd, _ = ImGui.InputText("Group Command##DialogConfig", tmpGpCmd)
-			if tmpGpCmd ~= cmdGroup then
-				cmdGroup = tmpGpCmd:gsub(" $","")
+local function DrawHelpWin()
+	ImGui.SetNextWindowSize(600, 350, ImGuiCond.Appearing)
+	local openHelpWin, showHelpWin = ImGui.Begin("Help##DialogDB_"..ME, true, bit32.bor(ImGuiWindowFlags.NoCollapse))	
+	if not openHelpWin then
+		showHelp = false
+	end
+	if not showHelpWin then
+		ImGui.End()
+		return
+	end
+	ImGui.SeparatorText("NPC Dialog DB Help")
+	ImGui.Text("Commands:")
+	local sizeX, sizeY = ImGui.GetContentRegionAvail()
+	ImGui.BeginTable("HelpTable", 2,bit32.bor(ImGuiTableFlags.Borders, ImGuiTableFlags.ScrollY, ImGuiTableFlags.RowBg,ImGuiTableFlags.Resizable), ImVec2(sizeX, sizeY - 20))
+	ImGui.TableSetupColumn("Command", ImGuiTableColumnFlags.WidthAlwaysAutoResize)
+	ImGui.TableSetupColumn("Description", ImGuiTableColumnFlags.WidthStretch,230)
+	ImGui.TableHeadersRow()
+	ImGui.TableNextRow()
+	ImGui.TableNextColumn()
+	ImGui.Text("/dialogdb add [\"description\"] [\"command\"]")
+	ImGui.TableNextColumn()
+	ImGui.TextWrapped("Adds to Current Zone description and command")
+	ImGui.TableNextRow()
+	ImGui.TableNextColumn()
+	ImGui.Text("/dialogdb add [\"Value\"]")
+	ImGui.TableNextColumn()
+	ImGui.TextWrapped("Adds to Current Zone description and command = Value")
+	ImGui.TableNextRow()
+	ImGui.TableNextColumn()
+	ImGui.Text("/dialogdb addall [\"description\"] [\"command\"]")
+	ImGui.TableNextColumn()
+	ImGui.TextWrapped("Adds to All Zones description and command")
+	ImGui.TableNextRow()
+	ImGui.TableNextColumn()
+	ImGui.Text("/dialogdb addall [\"Value\"]")
+	ImGui.TableNextColumn()
+	ImGui.TextWrapped("Adds to All Zones description and command = Value")
+	ImGui.TableNextRow()
+	ImGui.TableNextColumn()
+	ImGui.Text("/dialogdb help")
+	ImGui.TableNextColumn()
+	ImGui.Text("Display Help")
+	ImGui.TableNextRow()
+	ImGui.TableNextColumn()
+	ImGui.Text("/dialogdb config")
+	ImGui.TableNextColumn()
+	ImGui.Text("Display Config Window")
+	ImGui.TableNextRow()
+	ImGui.TableNextColumn()
+	ImGui.Text("/dialogdb debug")
+	ImGui.TableNextColumn()
+	ImGui.TextWrapped("Toggles Debugging, Turns off Commands and Prints them out so you can verify them")
+	ImGui.EndTable()
+	ImGui.End()
+end
+
+local function DrawMainWin()
+	local ColorCount, StyleCount = LoadTheme.StartTheme(theme.Theme[themeID])
+	local openMain, showMain = ImGui.Begin("NPC Dialog##DialogDB_Main_"..ME, true, winFlags)
+	if not openMain then
+		ShowDialog = false
+	end
+	if not showMain then
+		LoadTheme.EndTheme(ColorCount, StyleCount)
+		ImGui.End()
+		return
+	end
+	if checkDialog() then
+		ImGui.PushID('theme')
+		ImGui.Text(gIcon)
+		ImGui.PopID()
+		if ImGui.IsItemHovered() then
+			if ImGui.IsMouseReleased(0) then
+				ConfUI = not ConfUI
+				tmpTarget = CurrTarget
 			end
-			ImGui.TableNextColumn()
-			if ImGui.Button("Set Group Command##DialogConfig") then
-				Config.cmdGroup = tmpGpCmd:gsub(" $","")
-				mq.pickle(dialogConfig, Config)
-			end
-			ImGui.TableNextRow()
-			ImGui.TableNextColumn()
-			tmpZnCmd, _ = ImGui.InputText("Zone Command##DialogConfig", tmpZnCmd)	
-			if tmpZnCmd ~= cmdZone then
-				cmdZone = tmpZnCmd:gsub(" $","")
-			end
-			ImGui.TableNextColumn()
-			if ImGui.Button("Set Zone Command##DialogConfig") then
-				Config.cmdZone = tmpZnCmd:gsub(" $","")
-				mq.pickle(dialogConfig, Config)
-			end
-			ImGui.TableNextRow()
-			ImGui.TableNextColumn()
-			tmpChCmd, _ = ImGui.InputText("Character Command##DialogConfig", tmpChCmd)
-			if tmpChCmd ~= cmdChar then
-				cmdChar = tmpChCmd:gsub(" $","")
-			end
-			ImGui.TableNextColumn()
-			if ImGui.Button("Set Character Command##DialogConfig") then
-				Config.cmdChar = tmpChCmd:gsub(" $","")
-				mq.pickle(dialogConfig, Config)
-			end
-			ImGui.EndTable()
-			if ImGui.Button("Select Theme##DialogConfig") then
+			if ImGui.IsMouseReleased(1) then
 				themeGUI = not themeGUI
 			end
-			ImGui.Separator()
-			--- Dialog Config Table
-			if tmpTarget ~= nil and tmpTarget ~= 'None' then
-				local sizeX, sizeY = ImGui.GetContentRegionAvail()
-				ImGui.SeparatorText(tmpTarget.."'s Dialogs")
-				-- ImGui.BeginChild("DialogConfigChild", sizeX, sizeY -30, bit32.bor(ImGuiChildFlags.Border))
-				ImGui.BeginTable("NPC Dialogs##DialogConfigTable2", 5, bit32.bor(ImGuiTableFlags.Borders,ImGuiTableFlags.ScrollY),ImVec2(sizeX,sizeY-80))
-				ImGui.TableSetupScrollFreeze(0, 1)
-				ImGui.TableSetupColumn("NPC##DialogDB_Config", ImGuiTableColumnFlags.WidthFixed, 100)
-				ImGui.TableSetupColumn("Zone##DialogDB_Config", ImGuiTableColumnFlags.WidthFixed, 100)
-				ImGui.TableSetupColumn("Description##DialogDB_Config", ImGuiTableColumnFlags.WidthStretch, 100)
-				ImGui.TableSetupColumn("Trigger##DialogDB_Config", ImGuiTableColumnFlags.WidthStretch, 100)
-				ImGui.TableSetupColumn("##DialogDB_Config_Save", ImGuiTableColumnFlags.WidthFixed, 120)
-				ImGui.TableHeadersRow()
-				local id = 1
-				if Dialog[serverName][tmpTarget] == nil then
-					Dialog[serverName][tmpTarget] = {allzones = {}, [curZone] = {}}
-					newTarget = true
-				else
-					-- Use sortedKeys to sort zones and then descriptions within zones
-					local sortedZones = sortedKeys(Dialog[serverName][tmpTarget])
-					for _, z in ipairs(sortedZones) do
-						local sortedDescriptions = sortedKeys(Dialog[serverName][tmpTarget][z])
-						for _, d in ipairs(sortedDescriptions) do
-							local c = Dialog[serverName][tmpTarget][z][d]
-							ImGui.TableNextRow()
-							ImGui.TableNextColumn()
-							ImGui.Text(tmpTarget)
-							ImGui.TableNextColumn()
-							ImGui.Text(z)
-							ImGui.TableNextColumn()
-							ImGui.Text(d)
-							ImGui.TableNextColumn()
-							ImGui.Text(c)
-							ImGui.TableNextColumn()
-							if ImGui.Button("Edit##DialogDB_Config_Edit_"..id) then
-								eZone = z
-								eTar = tmpTarget
-								eDes = d
-								eCmd = c
-								newCmd = c
-								newDesc = d
-								editGUI = true
-							end
-							ImGui.SameLine()
-							if ImGui.Button("Delete##DialogDB_Config_"..id) then
-								Dialog[serverName][tmpTarget][z][d] = nil
-								mq.pickle(dialogData, Dialog)
-							end
-							id = id + 1
-						end
+		end
+		ImGui.SameLine()
+		ImGui.Text("%s's Dialog", CurrTarget)
+		local dialogCombined = handleCombinedDialog()
+		if next(dialogCombined) ~= nil then
+
+			local sortedKeyList = sortedKeys(dialogCombined)
+			if dialogCombined[tmpDesc] == nil then
+				tmpDesc = 'None'
+			end
+			ImGui.SetNextItemWidth(200)
+			if ImGui.BeginCombo("##DialogDBCombined", tmpDesc) then
+				for _, desc in pairs(sortedKeyList) do
+					local isSelected = (desc == tmpDesc)
+					if ImGui.Selectable(desc, isSelected) then
+						tmpDesc = desc
+						_G["cmdString"] = dialogCombined[desc] -- Global to maintain state outside of this function
 					end
-				end
-				ImGui.EndTable()
-				if ImGui.Button("Delete NPC##DialogConfig") then
-					Dialog[serverName][tmpTarget] = nil
-					mq.pickle(dialogData, Dialog)
-					ConfUI = false
-				end
-				-- ImGui.EndChild()
-			end
-			local tmpTxtAuto = autoAdd and "Disable Auto Add" or "Enable Auto Add"
-			if ImGui.Button(tmpTxtAuto.."##DialogConfigAutoAdd") then
-				autoAdd = not autoAdd
-				Config.autoAdd = autoAdd
-				mq.pickle(dialogConfig, Config)
-				setEvents()
-			end
-			ImGui.SameLine()
-			if ImGui.Button("Add Dialog##DialogConfig") then
-				if Dialog[serverName][tmpTarget] == nil then
-					Dialog[serverName][tmpTarget] = {allzones = {}, [curZone] = {}}
-				end
-				eZone = curZone
-				eTar = tmpTarget
-				eDes = "NEW"
-				eCmd = "NEW"
-				newCmd = "NEW"
-				newDesc = "NEW"
-				editGUI = true
-			end
-			ImGui.SameLine()
-			if ImGui.Button("Refresh Target##DialogConf_Refresh") then
-				tmpTarget = mq.TLO.Target.DisplayName()
-			end
-			ImGui.SameLine()
-			if ImGui.Button("Cancel##DialogConf_Cancel") then
-				if newTarget then
-					Dialog[serverName][tmpTarget] = nil
-					newTarget = false
-				end
-				ConfUI = false
-			end
-			ImGui.SameLine()
-			if ImGui.Button("Close##DialogConf_Close") then
-				ConfUI = false
-			end
-			LoadTheme.EndTheme(ColorCountConf, StyleCountConf)
-			ImGui.End()
-		end
-	end
-
-	--- Dialog Edit Window
-	if editGUI then
-		local ColorCountEdit, StyleCountEdit = LoadTheme.StartTheme(theme.Theme[themeID])
-		local openE, showE = ImGui.Begin("Edit Dialog##Dialog_Edit_"..ME, true, ImGuiWindowFlags.NoCollapse)
-		if not openE then
-			editGUI = false
-			entries = {}
-		end
-		if not showE then
-			LoadTheme.EndTheme(ColorCountEdit, StyleCountEdit)
-			ImGui.End()
-		else
-			EditGUI(serverName,eTar,eZone,eDes,eCmd)
-			LoadTheme.EndTheme(ColorCountEdit, StyleCountEdit)
-			ImGui.End()
-		end
-	end
-
-	--- Theme Selector Window
-	if themeGUI then
-		local ColorCountTheme, StyleCountTheme = LoadTheme.StartTheme(theme.Theme[themeID])
-		local openTheme, showTheme = ImGui.Begin('Theme Selector##DialogDB_'..ME,true,bit32.bor(ImGuiWindowFlags.NoCollapse, ImGuiWindowFlags.AlwaysAutoResize))
-		if not openTheme then
-			themeGUI = false
-		end
-		if not showTheme then
-			LoadTheme.EndTheme(ColorCountTheme, StyleCountTheme)
-			ImGui.End()
-		else
-			ImGui.SeparatorText("Theme##DialogDB")
-			
-			ImGui.Text("Cur Theme: %s", themeName)
-			-- Combo Box Load Theme
-			if ImGui.BeginCombo("Load Theme##DialogDB", themeName) then
-			
-				for k, data in pairs(theme.Theme) do
-					local isSelected = data.Name == themeName
-					if ImGui.Selectable(data.Name, isSelected) then
-						theme.LoadTheme = data.Name
-						themeID = k
-						themeName = theme.LoadTheme
+					if isSelected then
+						ImGui.SetItemDefaultFocus()
 					end
 				end
 				ImGui.EndCombo()
 			end
-			
-			if ImGui.Button('Reload Theme File') then
-				loadTheme()
+			ImGui.SameLine()
+			local eyeCon = showCmds and Icons.FA_CARET_UP or Icons.FA_CARET_DOWN
+
+			if ImGui.Button(eyeCon) then showCmds = not showCmds end
+			if showCmds then
+				if _G["cmdString"] and _G["cmdString"] ~= '' then
+					ImGui.Separator()
+					if ImGui.Button('Say ##DialogDBCombined') then
+						if not DEBUG then
+							mq.cmdf("%s",  _G["cmdString"])
+						else
+							printf("%s",  _G["cmdString"])
+						end
+											end
+					if mq.TLO.Me.GroupSize() > 1 then
+						ImGui.SameLine()
+						if ImGui.Button('Group Say ##DialogDBCombined') then
+							if cmdGroup:find("^/d") then
+								cmdGroup = cmdGroup.." "
+							end
+							if not DEBUG then
+								mq.cmdf("/multiline ; %s/target %s; /timed 5, %s%s",cmdGroup, CurrTarget,cmdGroup,_G["cmdString"])
+							else
+								printf("/multiline ; %s/target %s; /timed 5, %s%s",cmdGroup, CurrTarget,cmdGroup,_G["cmdString"])
+							end
+						end
+						ImGui.SameLine()
+						local tmpDelay = delay
+						ImGui.SetNextItemWidth(75)
+						tmpDelay = ImGui.InputInt("Delay##DialogDBCombined", tmpDelay, 1, 1)
+						if tmpDelay < 0 then tmpDelay = 0 end
+						if tmpDelay ~= delay then
+							delay = tmpDelay
+						end
+						if ImGui.Button('Group Say Delayed ##DialogDBCombined') then
+							local cDelay = delay * 10
+							for i = 1, mq.TLO.Me.GroupSize() - 1 do
+								local pName = mq.TLO.Group.Member(i).DisplayName()
+								if cmdChar:find("/bct") then
+									pName = pName.." /"
+								else
+									pName = pName.." "
+								end
+								if not DEBUG then
+									mq.cmdf("/multiline ; %s %s/target %s; %s %s/timed %s, %s",cmdChar,pName, CurrTarget,cmdChar,pName ,cDelay, _G["cmdString"])
+								else
+									printf("/multiline ; %s %s/target %s; %s %s/timed %s, %s",cmdChar,pName, CurrTarget,cmdChar,pName ,cDelay,  _G["cmdString"])
+								end
+								cDelay = cDelay + (delay * 10)
+							end
+							if not DEBUG then
+								mq.cmdf("/timed %s, %s",cDelay, _G["cmdString"])
+							else
+								printf("/timed %s, %s",cDelay, _G["cmdString"])
+							end
+						end
+						ImGui.SameLine()
+						if ImGui.Button('Zone Members ##DialogDBCombined') then
+							if cmdZone:find("^/d") then
+								cmdZone = cmdZone.." "
+							end
+							if not DEBUG then
+								mq.cmdf("/multiline ; %s/target %s; /timed 5, %s%s",cmdZone, CurrTarget,cmdZone, _G["cmdString"])
+							else
+								printf("/multiline ; %s/target %s; /timed 5, %s%s",cmdZone, CurrTarget,cmdZone, _G["cmdString"])
+							end
+						end
+					end
+				end
 			end
-			LoadTheme.EndTheme(ColorCountTheme, StyleCountTheme)
-			ImGui.End()
 		end
+	end
+	LoadTheme.EndTheme(ColorCount, StyleCount)
+	ImGui.End()
+end
+
+local function GUI_Main()
+	--- Dialog Main Window
+	if ShowDialog then
+		DrawMainWin()
+	end
+
+	--- Dialog Config Window
+	if ConfUI then
+		DrawConfigWin()
+	end
+
+	--- Dialog Edit Window
+	if editGUI then
+		DrawEditWin(serverName, eTar, eZone, eDes, eCmd)
+	end
+
+	--- Theme Selector Window
+	if themeGUI then
+		DrawThemeWin()		
 	end
 
 	-- help window
 	if showHelp then
-		ImGui.SetNextWindowSize(600, 350, ImGuiCond.Appearing)
-		local openHelpWin, showHelpWin = ImGui.Begin("Help##DialogDB_"..ME, true, bit32.bor(ImGuiWindowFlags.NoCollapse))	
-		if not openHelpWin then
-			showHelp = false
-		end
-		if not showHelpWin then
-			ImGui.End()
-		else
-			ImGui.SeparatorText("NPC Dialog DB Help")
-			ImGui.Text("Commands:")
-			local sizeX, sizeY = ImGui.GetContentRegionAvail()
-			ImGui.BeginTable("HelpTable", 2,bit32.bor(ImGuiTableFlags.Borders, ImGuiTableFlags.ScrollY, ImGuiTableFlags.RowBg,ImGuiTableFlags.Resizable), ImVec2(sizeX, sizeY - 20))
-			ImGui.TableSetupColumn("Command", ImGuiTableColumnFlags.WidthAlwaysAutoResize)
-			ImGui.TableSetupColumn("Description", ImGuiTableColumnFlags.WidthStretch,230)
-			ImGui.TableHeadersRow()
-			ImGui.TableNextRow()
-			ImGui.TableNextColumn()
-			ImGui.Text("/dialogdb add [\"description\"] [\"command\"]")
-			ImGui.TableNextColumn()
-			ImGui.TextWrapped("Adds to Current Zone description and command")
-			ImGui.TableNextRow()
-			ImGui.TableNextColumn()
-			ImGui.Text("/dialogdb add [\"Value\"]")
-			ImGui.TableNextColumn()
-			ImGui.TextWrapped("Adds to Current Zone description and command = Value")
-			ImGui.TableNextRow()
-			ImGui.TableNextColumn()
-			ImGui.Text("/dialogdb addall [\"description\"] [\"command\"]")
-			ImGui.TableNextColumn()
-			ImGui.TextWrapped("Adds to All Zones description and command")
-			ImGui.TableNextRow()
-			ImGui.TableNextColumn()
-			ImGui.Text("/dialogdb addall [\"Value\"]")
-			ImGui.TableNextColumn()
-			ImGui.TextWrapped("Adds to All Zones description and command = Value")
-			ImGui.TableNextRow()
-			ImGui.TableNextColumn()
-			ImGui.Text("/dialogdb help")
-			ImGui.TableNextColumn()
-			ImGui.Text("Display Help")
-			ImGui.TableNextRow()
-			ImGui.TableNextColumn()
-			ImGui.Text("/dialogdb config")
-			ImGui.TableNextColumn()
-			ImGui.Text("Display Config Window")
-			ImGui.TableNextRow()
-			ImGui.TableNextColumn()
-			ImGui.Text("/dialogdb debug")
-			ImGui.TableNextColumn()
-			ImGui.TextWrapped("Toggles Debugging, Turns off Commands and Prints them out so you can verify them")
-			ImGui.EndTable()
-			ImGui.End()
-		end
+		DrawHelpWin()
 	end
-	return ShowDialog
 end
 
 local function init()
