@@ -28,7 +28,7 @@ local dialogConfig = mq.configDir ..'/DialogDB_Config.lua'
 local entries = {}
 local showCmds = true
 local showHelp = false
-local ME = mq.TLO.Me.Name()
+local ME = ''
 local inputText = ""
 
 local Config = {
@@ -816,6 +816,7 @@ local function GUI_Main()
 end
 
 local function init()
+	ME = mq.TLO.Me.Name()
 	if mq.TLO.MacroQuest.BuildName() ~= 'Emu' then serverName = 'Live' end -- really only care about server name for EMU as the dialogs may vary from serever to server to server
 	loadSettings()
 	printf("Dialog Data Loaded for %s",serverName)
@@ -829,7 +830,7 @@ end
 
 local function mainLoop()
 	while Running do
-		if mq.TLO.MacroQuest.GameState() ~= "INGAME" then mq.exit() end
+		if mq.TLO.EverQuest.GameState() ~= "INGAME" then print("\aw[\atDialogDB\ax] \arNot in game, \aoShutting Down...") mq.exit() end
 		if mq.TLO.Me.Zoning() then
 			tmpDesc = ''
 			CurrTarget = 'None'
@@ -852,6 +853,8 @@ local function mainLoop()
 	end
 	mq.exit()
 end
+
+if mq.TLO.EverQuest.GameState() ~= "INGAME" then print("\aw[\atDialogDB\ax] \arNot in game, \ayTry again later...") mq.exit() end
 
 init()
 mainLoop()
