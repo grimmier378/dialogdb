@@ -457,11 +457,6 @@ return {
 				['None'] = '/say None',
 			},
 		},
-		['froglok bok knight'] = {
-			['allzones'] = {
-				['NEW'] = '/say NEW',
-			},
-		},
 		['Translocator Setikan'] = {
 			['freeporte'] = {
 				['Ocean of Tears'] = '/say Travel to the Ocean of Tears',

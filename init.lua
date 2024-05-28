@@ -152,16 +152,16 @@ local function eventNPC(line,who)
 	local tmpCheck = mq.TLO.Target.DisplayName() or 'None'
 	if who:find("^"..tmpCheck) or line:find("^"..tmpCheck) then
 		nName = tmpCheck
-	end
+	else return end
 	-- print(tmpCheck)
 	-- print(who)
 	local found = false
 	-- print(nName)
 	local check = string.format("npc =%s",nName)
-	if mq.TLO.SpawnCount(check)() == 0 then return end
+	if mq.TLO.SpawnCount(check)() <= 0 then return end
 	-- printf("%s",mq.TLO.SpawnCount(check)())
 	if not line:find("^"..nName) then return end
-
+	line = line:gsub(nName,"")
 	for w in string.gmatch(line, "%[(.-)%]") do
 		if w ~= nil then
 			if Dialog[serverName][nName] == nil then Dialog[serverName][nName] = {} end
@@ -749,18 +749,20 @@ local function DrawMainWin()
 						if ImGui.Button('Group Say Delayed ##DialogDBCombined') then
 							local cDelay = delay * 10
 							for i = 1, mq.TLO.Me.GroupSize() - 1 do
-								local pName = mq.TLO.Group.Member(i).DisplayName()
-								if cmdChar:find("/bct") then
-									pName = pName.." /"
-								else
-									pName = pName.." "
+								if mq.TLO.Group.Member(i).Present() then
+									local pName = mq.TLO.Group.Member(i).DisplayName()
+									if cmdChar:find("/bct") then
+										pName = pName.." /"
+									else
+										pName = pName.." "
+									end
+									if not DEBUG then
+										mq.cmdf("/multiline ; %s %s/target %s; %s %s/timed %s, %s",cmdChar,pName, CurrTarget,cmdChar,pName ,cDelay, _G["cmdString"])
+									else
+										printf("/multiline ; %s %s/target %s; %s %s/timed %s, %s",cmdChar,pName, CurrTarget,cmdChar,pName ,cDelay,  _G["cmdString"])
+									end
+									cDelay = cDelay + (delay * 10)
 								end
-								if not DEBUG then
-									mq.cmdf("/multiline ; %s %s/target %s; %s %s/timed %s, %s",cmdChar,pName, CurrTarget,cmdChar,pName ,cDelay, _G["cmdString"])
-								else
-									printf("/multiline ; %s %s/target %s; %s %s/timed %s, %s",cmdChar,pName, CurrTarget,cmdChar,pName ,cDelay,  _G["cmdString"])
-								end
-								cDelay = cDelay + (delay * 10)
 							end
 							if not DEBUG then
 								mq.cmdf("/timed %s, %s",cDelay, _G["cmdString"])
