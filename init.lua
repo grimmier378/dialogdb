@@ -4,7 +4,10 @@ Icons = require('mq.ICONS')
 local LoadTheme = require('lib.theme_loader')
 local themeID = 1
 local theme = {}
-local themeFile = string.format('%s/MyThemeZ.lua', mq.configDir)
+local themeFileOld = string.format('%s/MyThemeZ.lua', mq.configDir)
+local themeFile = string.format('%s/MyUI/MyThemeZ.lua', mq.configDir)
+
+local themeName = 'Default'
 local gIcon = Icons.MD_SETTINGS
 local Running = false
 local hasDialog = false
@@ -17,14 +20,17 @@ local cmdZone = '/dgza'
 local cmdChar = '/dex'
 local cmdSelf = '/say'
 local tmpDesc = ''
-local themeName = 'Default'
+
 local autoAdd = false
 local DEBUG, newTarget = false, false
 local tmpTarget = 'None'
 local eZone, eTar, eDes, eCmd, newCmd, newDesc = '', '', '', '', '', ''
 local CurrTarget = mq.TLO.Target.DisplayName() or 'None'
-local dialogData = mq.configDir ..'/npc_dialog.lua'
-local dialogConfig = mq.configDir ..'/DialogDB_Config.lua'
+local dialogDataOld = mq.configDir ..'/npc_dialog.lua'
+local dialogConfigOld = mq.configDir ..'/DialogDB_Config.lua'
+local dialogData = mq.configDir ..'/MyUI/DialogDB/npc_dialog.lua'
+local dialogConfig = mq.configDir ..'/MyUI/DialogDB/DialogDB_Config.lua'
+
 local entries = {}
 local showCmds = true
 local showHelp = false
@@ -64,8 +70,13 @@ end
 local function loadTheme()
 	if File_Exists(themeFile) then
 		theme = dofile(themeFile)
+	else
+		if File_Exists(themeFileOld) then
+			theme = dofile(themeFileOld)
 		else
-		theme = require('themes') -- your local themes file incase the user doesn't have one in config folder
+			theme = require('themes') -- your local themes file incase the user doesn't have one in config folder
+		end
+		mq.pickle(themeFile, theme)
 	end
 	themeName = theme.LoadTheme or 'Default'
 		if theme and theme.Theme then
@@ -80,6 +91,10 @@ end
 local function loadSettings()
 	-- Check if the dialog data file exists
 	if not File_Exists(dialogData) then
+		-- If the old dialog data file exists, move it to the new location
+		if File_Exists(dialogDataOld) then
+			Dialog = dofile(dialogDataOld)
+		end
 		mq.pickle(dialogData, Dialog)
 	else
 		local tmpDialog = dofile(dialogData)
@@ -101,7 +116,11 @@ local function loadSettings()
 		Dialog = tmpDialog
 	end
 	if not File_Exists(dialogConfig) then
-		mq.pickle(dialogConfig, {cmdGroup = cmdGroup, cmdZone = cmdZone, cmdChar = cmdChar, autoAdd = autoAdd, cmdSelf = cmdSelf})
+		if File_Exists(dialogConfigOld) then
+			Config = dofile(dialogConfigOld)
+		else
+			ConFig = {cmdGroup = cmdGroup, cmdZone = cmdZone, cmdChar = cmdChar, autoAdd = autoAdd, cmdSelf = cmdSelf}
+		end
 		ConfUI = true
 		tmpTarget = 'None'
 	else
@@ -112,6 +131,7 @@ local function loadSettings()
 		cmdSelf = Config.cmdSelf
 		autoAdd = Config.autoAdd
 	end
+	mq.pickle(dialogConfig, Config)
 	loadTheme()
 
 
@@ -184,7 +204,7 @@ local function setEvents()
 	if autoAdd then
 		-- mq.event("npc_say1", '#1# say#*#[#*#]#*#', eventNPC)
 		-- mq.event("npc_whisper2", '#1# whisper#*#[#*#]#*#', eventNPC)
-		mq.event("npc_emotes3", '#1# #*# [#*#]#*#', eventNPC)
+		mq.event("npc_emotes3", '#1# #*#[#*#]#*#', eventNPC)
 	else
 		-- mq.unevent("npc_say1")
 		-- mq.unevent("npc_whisper2")
@@ -750,18 +770,20 @@ local function DrawMainWin()
 							local cDelay = delay * 10
 							for i = 1, mq.TLO.Me.GroupSize() - 1 do
 								if mq.TLO.Group.Member(i).Present() then
-									local pName = mq.TLO.Group.Member(i).DisplayName()
-									if cmdChar:find("/bct") then
-										pName = pName.." /"
-									else
-										pName = pName.." "
+									if mq.TLO.Group.Member(i).Distance() < 100 then
+										local pName = mq.TLO.Group.Member(i).DisplayName()
+										if cmdChar:find("/bct") then
+											pName = pName.." /"
+										else
+											pName = pName.." "
+										end
+										if not DEBUG then
+											mq.cmdf("/multiline ; %s %s/target %s; %s %s/timed %s, %s",cmdChar,pName, CurrTarget,cmdChar,pName ,cDelay, _G["cmdString"])
+										else
+											printf("/multiline ; %s %s/target %s; %s %s/timed %s, %s",cmdChar,pName, CurrTarget,cmdChar,pName ,cDelay,  _G["cmdString"])
+										end
+										cDelay = cDelay + (delay * 10)
 									end
-									if not DEBUG then
-										mq.cmdf("/multiline ; %s %s/target %s; %s %s/timed %s, %s",cmdChar,pName, CurrTarget,cmdChar,pName ,cDelay, _G["cmdString"])
-									else
-										printf("/multiline ; %s %s/target %s; %s %s/timed %s, %s",cmdChar,pName, CurrTarget,cmdChar,pName ,cDelay,  _G["cmdString"])
-									end
-									cDelay = cDelay + (delay * 10)
 								end
 							end
 							if not DEBUG then
@@ -841,7 +863,7 @@ local function mainLoop()
 			ConfUI = false
 			editGUI = false
 			while mq.TLO.Me.Zoning() do
-				mq.delay(1000)
+				mq.delay(500)
 			end
 		end
 		if checkDialog() then
@@ -851,7 +873,7 @@ local function mainLoop()
 			if CurrTarget ~= mq.TLO.Target.DisplayName() then tmpDesc = '' end
 		end
 		mq.doevents()
-		mq.delay(10)
+		mq.delay(16)
 	end
 	mq.exit()
 end
