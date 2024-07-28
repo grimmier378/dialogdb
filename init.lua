@@ -12,7 +12,8 @@ local gIcon = Icons.MD_SETTINGS
 local Running = false
 local hasDialog = false
 local Dialog = require('npc_dialog')
-local curZone = mq.TLO.Zone.ShortName() or 'None'
+local currZone = mq.TLO.Zone.ShortName() or 'None'
+local lastZone
 local serverName = mq.TLO.EverQuest.Server()
 local ShowDialog, ConfUI, editGUI, themeGUI = false, false, false, false
 local cmdGroup = '/dgge'
@@ -185,10 +186,10 @@ local function eventNPC(line,who)
 	for w in string.gmatch(line, "%[(.-)%]") do
 		if w ~= nil then
 			if Dialog[serverName][nName] == nil then Dialog[serverName][nName] = {} end
-			if Dialog[serverName][nName][curZone] == nil then Dialog[serverName][nName][curZone] = {} end
+			if Dialog[serverName][nName][currZone] == nil then Dialog[serverName][nName][currZone] = {} end
 			if Dialog[serverName][nName]['allzones'] == nil	then Dialog[serverName][nName]['allzones'] = {} end
-			if Dialog[serverName][nName][curZone][w] == nil then
-				Dialog[serverName][nName][curZone][w] =  w
+			if Dialog[serverName][nName][currZone][w] == nil then
+				Dialog[serverName][nName][currZone][w] =  w
 				found = true
 			end
 		end
@@ -215,16 +216,16 @@ end
 local function checkDialog()
 	hasDialog = false
 	if mq.TLO.Target() ~= nil then
-		curZone = mq.TLO.Zone.ShortName() or 'None'
+		currZone = mq.TLO.Zone.ShortName() or 'None'
 		CurrTarget = mq.TLO.Target.DisplayName()
 		-- printf("Server: %s  Zone: %s Target: %s",serverName,curZone,target)
 		if Dialog[serverName] == nil then
 			return hasDialog
 		elseif Dialog[serverName][CurrTarget] == nil then
 			return hasDialog
-		elseif Dialog[serverName][CurrTarget][curZone] == nil and Dialog[serverName][CurrTarget]['allzones'] == nil then
+		elseif Dialog[serverName][CurrTarget][currZone] == nil and Dialog[serverName][CurrTarget]['allzones'] == nil then
 			return hasDialog
-		elseif Dialog[serverName][CurrTarget][curZone] ~= nil or Dialog[serverName][CurrTarget]['allzones'] ~= nil then
+		elseif Dialog[serverName][CurrTarget][currZone] ~= nil or Dialog[serverName][CurrTarget]['allzones'] ~= nil then
 			hasDialog = true
 			return hasDialog
 		end
@@ -281,20 +282,20 @@ local function bind(...)
 				if Dialog[serverName][name] == nil then
 					Dialog[serverName][name] = {}
 				end
-				if Dialog[serverName][name][curZone] == nil then
-					Dialog[serverName][name][curZone] = {}
+				if Dialog[serverName][name][currZone] == nil then
+					Dialog[serverName][name][currZone] = {}
 				end
 				if #args == 2 then
-					if Dialog[serverName][name][curZone][value] == nil then
+					if Dialog[serverName][name][currZone][value] == nil then
 						local cmdValue = value
 						if not cmdValue:match("^/") then cmdValue = string.format("/say %s",cmdValue) end
-						Dialog[serverName][name][curZone][value] = cmdValue
+						Dialog[serverName][name][currZone][value] = cmdValue
 						-- printf("Server: %s  Zone: %s Target: %s Dialog: %s",serverName,curZone,name, value)
 					end
 				elseif #args == 3 then
-					if Dialog[serverName][name][curZone][args[2]] == nil then
+					if Dialog[serverName][name][currZone][args[2]] == nil then
 						if not args[3]:match("^/") then args[3] = string.format("/say %s",args[3]) end
-						Dialog[serverName][name][curZone][args[2]] = args[3]
+						Dialog[serverName][name][currZone][args[2]] = args[3]
 					end
 				end
 				valueChanged = true
@@ -334,7 +335,7 @@ end
 -- Function to merge dialogues and handle Dialog display
 local function handleCombinedDialog()
 	local allZonesTable = Dialog[serverName][CurrTarget]['allzones'] or {}
-	local curZoneTable = Dialog[serverName][CurrTarget][curZone] or {}
+	local curZoneTable = Dialog[serverName][CurrTarget][currZone] or {}
 	local combinedTable = {}
 	
 	-- First, fill combinedTable with all zones data
@@ -374,7 +375,7 @@ local function DrawEditWin(server, target, zone, desc, cmd)
 
 	local aZones = (zone == 'allzones')
 	aZones, _ = ImGui.Checkbox("All Zones##EditDialogAllZones", aZones)
-	eZone = aZones and 'allzones' or curZone
+	eZone = aZones and 'allzones' or currZone
 	if zone ~= eZone then
 		zone = eZone
 	end
@@ -508,7 +509,7 @@ local function DrawConfigWin()
 		ImGui.TableHeadersRow()
 		local id = 1
 		if Dialog[serverName][tmpTarget] == nil then
-			Dialog[serverName][tmpTarget] = {allzones = {}, [curZone] = {}}
+			Dialog[serverName][tmpTarget] = {allzones = {}, [currZone] = {}}
 			newTarget = true
 		else
 			-- Use sortedKeys to sort zones and then descriptions within zones
@@ -563,9 +564,9 @@ local function DrawConfigWin()
 	ImGui.SameLine()
 	if ImGui.Button("Add Dialog##DialogConfig") then
 		if Dialog[serverName][tmpTarget] == nil then
-			Dialog[serverName][tmpTarget] = {allzones = {}, [curZone] = {}}
+			Dialog[serverName][tmpTarget] = {allzones = {}, [currZone] = {}}
 		end
-		eZone = curZone
+		eZone = currZone
 		eTar = tmpTarget
 		eDes = "NEW"
 		eCmd = "NEW"
@@ -813,6 +814,7 @@ local function DrawMainWin()
 end
 
 local function GUI_Main()
+	if currZone ~= lastZone then return end
 	--- Dialog Main Window
 	if ShowDialog then
 		DrawMainWin()
@@ -847,6 +849,8 @@ local function init()
 	Running = true
 	setEvents()
 	mq.bind('/dialogdb', bind)
+	currZone = mq.TLO.Zone.ShortName() or 'None'
+	lastZone = currZone
 	mq.imgui.init("Npc Dialog", GUI_Main)
 	local msgPref = string.format("\aw[\at%s\aw] ",mq.TLO.Time.Time24())
 	printf("%s\agDialog DB \aoLoaded... \at/dialogdb help \aoDisplay Help",msgPref)
@@ -855,16 +859,16 @@ end
 local function mainLoop()
 	while Running do
 		if mq.TLO.EverQuest.GameState() ~= "INGAME" then print("\aw[\atDialogDB\ax] \arNot in game, \aoShutting Down...") mq.exit() end
-		if mq.TLO.Me.Zoning() then
+		currZone = mq.TLO.Zone.ShortName() or 'None'
+		if currZone ~= lastZone then
 			tmpDesc = ''
 			CurrTarget = 'None'
 			hasDialog = false
 			ShowDialog = false
 			ConfUI = false
 			editGUI = false
-			while mq.TLO.Me.Zoning() do
-				mq.delay(500)
-			end
+			mq.delay(500)
+			lastZone = currZone
 		end
 		if checkDialog() then
 			ShowDialog = true
