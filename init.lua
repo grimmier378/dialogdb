@@ -770,6 +770,7 @@ local function DrawMainWin()
 						if ImGui.Button('Group Say Delayed ##DialogDBCombined') then
 							local cDelay = delay * 10
 							for i = 1, mq.TLO.Me.GroupSize() - 1 do
+								if i == 1 then cDelay = 10 end
 								if mq.TLO.Group.Member(i).Present() then
 									if mq.TLO.Group.Member(i).Distance() < 100 then
 										local pName = mq.TLO.Group.Member(i).DisplayName()
