@@ -1,27 +1,37 @@
 local mq = require('mq')
 local ImGui = require('ImGui')
-Icons = require('mq.ICONS')
-local LoadTheme = require('lib.theme_loader')
+local Module = {}
+Module.theme = {}
+Module.ActorMailBox = nil
+Module.ShowDialog, Module.ConfUI, Module.editGUI, Module.themeGUI = false, false, false, false
+Module.themeName = 'Default'
+Module.IsRunning = false
+Module.Name = "DialogDB"
+---@diagnostic disable-next-line:undefined-global
+local loadedExeternally = MyUI_ScriptName ~= nil and true or false
+
+if not loadedExeternally then
+	MyUI_Utils = require('lib.common')
+	MyUI_CharLoaded = mq.TLO.Me.DisplayName()
+	MyUI_Server = mq.TLO.EverQuest.Server()
+	MyUI_Icons = require('mq.ICONS')
+	MyUI_Build = mq.TLO.MacroQuest.BuildName()
+	MyUI_ThemeLoader = require('lib.theme_loader')
+end
+
+local LoadTheme = MyUI_ThemeLoader
 local themeID = 1
-local theme = {}
 local themeFileOld = string.format('%s/MyThemeZ.lua', mq.configDir)
 local themeFile = string.format('%s/MyUI/MyThemeZ.lua', mq.configDir)
-
-local themeName = 'Default'
-local gIcon = Icons.MD_SETTINGS
-local Running = false
+local gIcon = MyUI_Icons.MD_SETTINGS
 local hasDialog = false
-local Dialog = require('npc_dialog')
-local currZone = mq.TLO.Zone.ShortName() or 'None'
+local Dialog = require('defaults.npc_dialog')
 local lastZone
-local serverName = mq.TLO.EverQuest.Server()
-local ShowDialog, ConfUI, editGUI, themeGUI = false, false, false, false
 local cmdGroup = '/dgge'
 local cmdZone = '/dgza'
 local cmdChar = '/dex'
 local cmdSelf = '/say'
 local tmpDesc = ''
-
 local autoAdd = false
 local DEBUG, newTarget = false, false
 local tmpTarget = 'None'
@@ -35,33 +45,21 @@ local searchString = ''
 local entries = {}
 local showCmds = true
 local showHelp = false
-local ME = ''
 local inputText = ""
+local currZoneShort = mq.TLO.Zone.ShortName() or 'None'
+local msgPref = "\aw[\atDialogDB\aw] "
 
-local Config = {
+Module.Config = {
 	cmdGroup = cmdGroup,
 	cmdZone = cmdZone,
 	cmdChar = cmdChar,
 	cmdSelf = cmdSelf,
 	autoAdd = false,
-	themeName = themeName,
+	themeName = Module.themeName,
 }
 
 local winFlags = bit32.bor(ImGuiWindowFlags.NoCollapse, ImGuiWindowFlags.NoTitleBar, ImGuiWindowFlags.AlwaysAutoResize)
 local delay = 1
-
----comment Check to see if the file we want to work on exists.
----@param name string -- Full Path to file
----@return boolean -- returns true if the file exists and false otherwise
-local function File_Exists(name)
-	local f = io.open(name, "r")
-	if f ~= nil then
-		io.close(f)
-		return true
-	else
-		return false
-	end
-end
 
 local function fixEnding(var)
 	var = var or "" -- ensure var is not nil
@@ -75,35 +73,62 @@ local function fixEnding(var)
 end
 
 local function loadTheme()
-	if File_Exists(themeFile) then
-		theme = dofile(themeFile)
+	if MyUI_Utils.File.Exists(themeFile) then
+		Module.theme = dofile(themeFile)
 	else
-		if File_Exists(themeFileOld) then
-			theme = dofile(themeFileOld)
+		if MyUI_Utils.File.Exists(themeFileOld) then
+			Module.theme = dofile(themeFileOld)
 		else
-			theme = require('themes') -- your local themes file incase the user doesn't have one in config folder
+			Module.theme = require('defaults.themes') -- your local themes file incase the user doesn't have one in config folder
 		end
-		mq.pickle(themeFile, theme)
+		mq.pickle(themeFile, Module.theme)
 	end
-	if theme and theme.Theme then
-		for tID, tData in pairs(theme.Theme) do
-			if tData['Name'] == themeName then
+	if Module.theme and Module.theme.Theme then
+		for tID, tData in pairs(Module.theme.Theme) do
+			if tData['Name'] == Module.themeName then
 				themeID = tID
 			end
 		end
 	end
 end
 
+local function DrawTheme(tName)
+	local StyleCounter = 0
+	local ColorCounter = 0
+	for tID, tData in pairs(Module.theme.Theme) do
+		if tData.Name == tName then
+			for pID, cData in pairs(Module.theme.Theme[tID].Color) do
+				ImGui.PushStyleColor(pID, ImVec4(cData.Color[1], cData.Color[2], cData.Color[3], cData.Color[4]))
+				ColorCounter = ColorCounter + 1
+			end
+			if tData['Style'] ~= nil then
+				if next(tData['Style']) ~= nil then
+					for sID, sData in pairs(Module.theme.Theme[tID].Style) do
+						if sData.Size ~= nil then
+							ImGui.PushStyleVar(sID, sData.Size)
+							StyleCounter = StyleCounter + 1
+						elseif sData.X ~= nil then
+							ImGui.PushStyleVar(sID, sData.X, sData.Y)
+							StyleCounter = StyleCounter + 1
+						end
+					end
+				end
+			end
+		end
+	end
+	return ColorCounter, StyleCounter
+end
+
 local function loadSettings()
 	-- Check if the dialog data file exists
-	if not File_Exists(dialogData) then
+	if not MyUI_Utils.File.Exists(dialogData) then
 		-- If the old dialog data file exists, move it to the new location
-		if File_Exists(dialogDataOld) then
+		if MyUI_Utils.File.Exists(dialogDataOld) then
 			Dialog = dofile(dialogDataOld)
 		end
 		mq.pickle(dialogData, Dialog)
 	else
-		local tmpDialog = dofile(dialogData)
+		local tmpDialog = dofile(dialogData) or {}
 		for server, sData in pairs(Dialog) do
 			tmpDialog[server] = tmpDialog[server] or {}
 			for target, tData in pairs(sData) do
@@ -121,27 +146,27 @@ local function loadSettings()
 		end
 		Dialog = tmpDialog
 	end
-	if not File_Exists(dialogConfig) then
-		if File_Exists(dialogConfigOld) then
-			Config = dofile(dialogConfigOld)
+	if not MyUI_Utils.File.Exists(dialogConfig) then
+		if MyUI_Utils.File.Exists(dialogConfigOld) then
+			Module.Config = dofile(dialogConfigOld)
 		else
-			ConFig = { cmdGroup = cmdGroup, cmdZone = cmdZone, cmdChar = cmdChar, autoAdd = autoAdd, cmdSelf = cmdSelf, themeName = themeName, }
+			Module.ConFig = { cmdGroup = cmdGroup, cmdZone = cmdZone, cmdChar = cmdChar, autoAdd = autoAdd, cmdSelf = cmdSelf, themeName = Module.themeName, }
 		end
-		ConfUI = true
+		Module.ConfUI = true
 		tmpTarget = 'None'
+		mq.pickle(dialogConfig, Module.Config)
 	else
-		Config = dofile(dialogConfig)
-		cmdGroup = Config.cmdGroup
-		cmdZone = Config.cmdZone
-		cmdChar = Config.cmdChar
-		cmdSelf = Config.cmdSelf
-		autoAdd = Config.autoAdd
-		themeName = Config.themeName or 'Default'
+		Module.Config = dofile(dialogConfig)
+		cmdGroup = Module.Config.cmdGroup
+		cmdZone = Module.Config.cmdZone
+		cmdChar = Module.Config.cmdChar
+		cmdSelf = Module.Config.cmdSelf
+		autoAdd = Module.Config.autoAdd
+		Module.themeName = Module.Config.themeName or 'Default'
 	end
-	mq.pickle(dialogConfig, Config)
 	loadTheme()
 
-
+	local needSave = false
 	--- Ensure that the command is a '/'' command otherwise add '/say ' to the front of it
 	for server, sData in pairs(Dialog) do
 		for target, tData in pairs(sData) do
@@ -149,27 +174,29 @@ local function loadSettings()
 				for desc, cmd in pairs(zData) do
 					if not cmd:match("^/") then
 						Dialog[server][target][zone][desc] = string.format("/say %s", cmd)
+						needSave = true
 					end
 				end
 			end
 		end
 	end
-	mq.pickle(dialogData, Dialog)
+	if needSave then
+		mq.pickle(dialogData, Dialog)
+	end
 end
 
 local function printHelp()
-	local msgPref = string.format("\aw[\at%s\aw] ", mq.TLO.Time.Time24())
-	printf("\aw[\at%s\aw] \agNPC Dialog DB \aoCommands:", msgPref)
-	printf("%s\agNPC Dialog DB \aoCurrent Zone:", msgPref)
-	printf("%s\ay/dialogdb add \aw[\at\"description\"\aw] [\at\"command\"\aw] \aoAdds to Current Zone description and command", msgPref)
-	printf("%s\ay/dialogdb add \aw[\at\"Value\"\aw] \aoAdds to Current Zone description and command = Value ", msgPref)
-	printf("%s\agNPC Dialog DB \aoAll Zones:", msgPref)
-	printf("%s\ay/dialogdb addall \aw[\at\"description\"\aw] [\at\"command\"\aw] \aoAdds to All Zones description and command", msgPref)
-	printf("%s\ay/dialogdb addall \aw[\at\"Value\"\aw] \aoAdds to All Zones description and command = Value ", msgPref)
-	printf("%s\agNPC Dialog DB \aoCommon:", msgPref)
-	printf("%s\ay/dialogdb help \aoDisplay Help", msgPref)
-	printf("%s\ay/dialogdb config \aoDisplay Config Window", msgPref)
-	printf("%s\ay/dialogdb debug \aoToggles Debugging, Turns off Commands and Prints them out so you can verify them", msgPref)
+	MyUI_Utils.PrintOutput('MyUI', nil, "\aw[\at%s\aw] \agNPC Dialog DB \aoCommands:", msgPref)
+	MyUI_Utils.PrintOutput('MyUI', nil, "%s\agNPC Dialog DB \aoCurrent Zone:", msgPref)
+	MyUI_Utils.PrintOutput('MyUI', nil, "%s\ay/dialogdb add \aw[\at\"description\"\aw] [\at\"command\"\aw] \aoAdds to Current Zone description and command", msgPref)
+	MyUI_Utils.PrintOutput('MyUI', nil, "%s\ay/dialogdb add \aw[\at\"Value\"\aw] \aoAdds to Current Zone description and command = Value ", msgPref)
+	MyUI_Utils.PrintOutput('MyUI', nil, "%s\agNPC Dialog DB \aoAll Zones:", msgPref)
+	MyUI_Utils.PrintOutput('MyUI', nil, "%s\ay/dialogdb addall \aw[\at\"description\"\aw] [\at\"command\"\aw] \aoAdds to All Zones description and command", msgPref)
+	MyUI_Utils.PrintOutput('MyUI', nil, "%s\ay/dialogdb addall \aw[\at\"Value\"\aw] \aoAdds to All Zones description and command = Value ", msgPref)
+	MyUI_Utils.PrintOutput('MyUI', nil, "%s\agNPC Dialog DB \aoCommon:", msgPref)
+	MyUI_Utils.PrintOutput('MyUI', nil, "%s\ay/dialogdb help \aoDisplay Help", msgPref)
+	MyUI_Utils.PrintOutput('MyUI', nil, "%s\ay/dialogdb config \aoDisplay Config Window", msgPref)
+	MyUI_Utils.PrintOutput('MyUI', nil, "%s\ay/dialogdb debug \aoToggles Debugging, Turns off Commands and Prints them out so you can verify them", msgPref)
 end
 
 local function eventNPC(line, who)
@@ -181,28 +208,28 @@ local function eventNPC(line, who)
 	else
 		return
 	end
-	-- print(tmpCheck)
-	-- print(who)
+	-- MyUI_Utils.MyUI_Utils.PrintOutput('MyUI',nil,tmpCheck)
+	-- MyUI_Utils.MyUI_Utils.PrintOutput('MyUI',nil,who)
 	local found = false
-	-- print(nName)
+	-- MyUI_Utils.MyUI_Utils.PrintOutput('MyUI',nil,nName)
 	local check = string.format("npc =%s", nName)
 	if mq.TLO.SpawnCount(check)() <= 0 then return end
-	-- printf("%s",mq.TLO.SpawnCount(check)())
+	-- MyUI_Utils.MyUI_Utils.PrintOutput('MyUI',nil,"%s",mq.TLO.SpawnCount(check)())
 	if not line:find("^" .. nName) then return end
 	line = line:gsub(nName, "")
 	for w in string.gmatch(line, "%[(.-)%]") do
 		if w ~= nil then
-			if Dialog[serverName][nName] == nil then Dialog[serverName][nName] = {} end
-			if Dialog[serverName][nName][currZone] == nil then Dialog[serverName][nName][currZone] = {} end
-			if Dialog[serverName][nName]['allzones'] == nil then Dialog[serverName][nName]['allzones'] = {} end
-			if Dialog[serverName][nName][currZone][w] == nil then
-				Dialog[serverName][nName][currZone][w] = w
+			if Dialog[MyUI_Server][nName] == nil then Dialog[MyUI_Server][nName] = {} end
+			if Dialog[MyUI_Server][nName][currZoneShort] == nil then Dialog[MyUI_Server][nName][currZoneShort] = {} end
+			if Dialog[MyUI_Server][nName]['allzones'] == nil then Dialog[MyUI_Server][nName]['allzones'] = {} end
+			if Dialog[MyUI_Server][nName][currZoneShort][w] == nil then
+				Dialog[MyUI_Server][nName][currZoneShort][w] = w
 				found = true
 			end
 		end
 	end
 	if found then
-		if ConfUI then newTarget = false end
+		if Module.ConfUI then newTarget = false end
 		mq.pickle(dialogData, Dialog)
 		loadSettings()
 	end
@@ -220,19 +247,23 @@ local function setEvents()
 	end
 end
 
+function Module.Unload()
+	mq.unevent("npc_emotes3")
+	mq.unbind("/dialogdb")
+end
+
 local function checkDialog()
 	hasDialog = false
 	if mq.TLO.Target() ~= nil then
-		currZone = mq.TLO.Zone.ShortName() or 'None'
 		CurrTarget = mq.TLO.Target.DisplayName()
-		-- printf("Server: %s  Zone: %s Target: %s",serverName,curZone,target)
-		if Dialog[serverName] == nil then
+		-- MyUI_Utils.MyUI_Utils.PrintOutput('MyUI',nil,"Server: %s  Zone: %s Target: %s",serverName,curZone,target)
+		if Dialog[MyUI_Server] == nil then
 			return hasDialog
-		elseif Dialog[serverName][CurrTarget] == nil then
+		elseif Dialog[MyUI_Server][CurrTarget] == nil then
 			return hasDialog
-		elseif Dialog[serverName][CurrTarget][currZone] == nil and Dialog[serverName][CurrTarget]['allzones'] == nil then
+		elseif Dialog[MyUI_Server][CurrTarget][currZoneShort] == nil and Dialog[MyUI_Server][CurrTarget]['allzones'] == nil then
 			return hasDialog
-		elseif Dialog[serverName][CurrTarget][currZone] ~= nil or Dialog[serverName][CurrTarget]['allzones'] ~= nil then
+		elseif Dialog[MyUI_Server][CurrTarget][currZoneShort] ~= nil or Dialog[MyUI_Server][CurrTarget]['allzones'] ~= nil then
 			hasDialog = true
 			return hasDialog
 		end
@@ -255,25 +286,27 @@ local function bind(...)
 	local valueChanged = false
 	if #args == 1 then
 		if args[1] == 'config' then
-			ConfUI = not ConfUI
+			Module.ConfUI = not Module.ConfUI
 			return
 		elseif args[1] == 'debug' then
 			DEBUG = not DEBUG
-			local msgPref = string.format("\aw[\at%s\aw] ", mq.TLO.Time.Time24())
 			if DEBUG then
-				printf("%s \ayDEBUGGING \agEnabled \ayALL COMMANDS WILL BE PRINTED TO CONSOLE", msgPref)
+				MyUI_Utils.PrintOutput('MyUI', nil, "%s \ayDEBUGGING \agEnabled \ayALL COMMANDS WILL BE PRINTED TO CONSOLE", msgPref)
 			else
-				printf("%s \ayDEBUGGING \arDisabled \ayALL COMMANDS WILL BE EXECUTED", msgPref)
+				MyUI_Utils.PrintOutput('MyUI', nil, "%s \ayDEBUGGING \arDisabled \ayALL COMMANDS WILL BE EXECUTED", msgPref)
 			end
 			return
 		elseif args[1] == 'help' then
 			showHelp = not showHelp
 			printHelp()
 			return
+		elseif args[1] == 'quit' or args[1] == 'exit' then
+			Module.IsRunning = false
+			return
 		else
 			showHelp = true
 			printHelp()
-			print("No String Supplied try again~")
+			MyUI_Utils.PrintOutput('MyUI', nil, "No String Supplied try again~")
 			return
 		end
 	end
@@ -283,51 +316,51 @@ local function bind(...)
 		if key == 'add' and #args >= 2 then
 			local name = mq.TLO.Target.DisplayName() or 'None'
 			if name ~= 'None' then
-				if Dialog[serverName] == nil then
-					Dialog[serverName] = {}
+				if Dialog[MyUI_Server] == nil then
+					Dialog[MyUI_Server] = {}
 				end
-				if Dialog[serverName][name] == nil then
-					Dialog[serverName][name] = {}
+				if Dialog[MyUI_Server][name] == nil then
+					Dialog[MyUI_Server][name] = {}
 				end
-				if Dialog[serverName][name][currZone] == nil then
-					Dialog[serverName][name][currZone] = {}
+				if Dialog[MyUI_Server][name][currZoneShort] == nil then
+					Dialog[MyUI_Server][name][currZoneShort] = {}
 				end
 				if #args == 2 then
-					if Dialog[serverName][name][currZone][value] == nil then
+					if Dialog[MyUI_Server][name][currZoneShort][value] == nil then
 						local cmdValue = value
 						if not cmdValue:match("^/") then cmdValue = string.format("/say %s", cmdValue) end
-						Dialog[serverName][name][currZone][value] = cmdValue
-						-- printf("Server: %s  Zone: %s Target: %s Dialog: %s",serverName,curZone,name, value)
+						Dialog[MyUI_Server][name][currZoneShort][value] = cmdValue
+						-- MyUI_Utils.MyUI_Utils.PrintOutput('MyUI',nil,"Server: %s  Zone: %s Target: %s Dialog: %s",serverName,curZone,name, value)
 					end
 				elseif #args == 3 then
-					if Dialog[serverName][name][currZone][args[2]] == nil then
+					if Dialog[MyUI_Server][name][currZoneShort][args[2]] == nil then
 						if not args[3]:match("^/") then args[3] = string.format("/say %s", args[3]) end
-						Dialog[serverName][name][currZone][args[2]] = args[3]
+						Dialog[MyUI_Server][name][currZoneShort][args[2]] = args[3]
 					end
 				end
 				valueChanged = true
 			end
 		elseif key == "addall" and #args >= 2 then
 			if name ~= 'None' then
-				if Dialog[serverName] == nil then
-					Dialog[serverName] = {}
+				if Dialog[MyUI_Server] == nil then
+					Dialog[MyUI_Server] = {}
 				end
-				if Dialog[serverName][name] == nil then
-					Dialog[serverName][name] = {}
+				if Dialog[MyUI_Server][name] == nil then
+					Dialog[MyUI_Server][name] = {}
 				end
-				if Dialog[serverName][name]['allzones'] == nil then
-					Dialog[serverName][name]['allzones'] = {}
+				if Dialog[MyUI_Server][name]['allzones'] == nil then
+					Dialog[MyUI_Server][name]['allzones'] = {}
 				end
 				if #args == 2 then
-					if Dialog[serverName][name]['allzones'][value] == nil then
+					if Dialog[MyUI_Server][name]['allzones'][value] == nil then
 						local cmdValue = value
 						if not cmdValue:match("^/") then cmdValue = string.format("/say %s", cmdValue) end
-						Dialog[serverName][name]['allzones'][value] = cmdValue
+						Dialog[MyUI_Server][name]['allzones'][value] = cmdValue
 					end
 				elseif #args == 3 then
-					if Dialog[serverName][name]['allzones'][args[2]] == nil then
+					if Dialog[MyUI_Server][name]['allzones'][args[2]] == nil then
 						if not args[3]:match("^/") then args[3] = string.format("/say %s", args[3]) end
-						Dialog[serverName][name]['allzones'][args[2]] = args[3]
+						Dialog[MyUI_Server][name]['allzones'][args[2]] = args[3]
 					end
 				end
 				valueChanged = true
@@ -341,8 +374,8 @@ end
 
 -- Function to merge dialogues and handle Dialog display
 local function handleCombinedDialog()
-	local allZonesTable = Dialog[serverName][CurrTarget]['allzones'] or {}
-	local curZoneTable = Dialog[serverName][CurrTarget][currZone] or {}
+	local allZonesTable = Dialog[MyUI_Server][CurrTarget]['allzones'] or {}
+	local curZoneTable = Dialog[MyUI_Server][CurrTarget][currZoneShort] or {}
 	local combinedTable = {}
 
 	-- First, fill combinedTable with all zones data
@@ -358,10 +391,10 @@ local function handleCombinedDialog()
 end
 
 local function DrawEditWin(server, target, zone, desc, cmd)
-	local ColorCountEdit, StyleCountEdit = LoadTheme.StartTheme(theme.Theme[themeID])
-	local openE, showE = ImGui.Begin("Edit Dialog##Dialog_Edit_" .. ME, true, ImGuiWindowFlags.NoCollapse)
+	local ColorCountEdit, StyleCountEdit = DrawTheme(Module.themeName)
+	local openE, showE = ImGui.Begin("Edit Dialog##Dialog_Edit_" .. MyUI_CharLoaded, true, ImGuiWindowFlags.NoCollapse)
 	if not openE then
-		editGUI = false
+		Module.editGUI = false
 		entries = {}
 	end
 	if not showE then
@@ -382,7 +415,7 @@ local function DrawEditWin(server, target, zone, desc, cmd)
 
 	local aZones = (zone == 'allzones')
 	aZones, _ = ImGui.Checkbox("All Zones##EditDialogAllZones", aZones)
-	eZone = aZones and 'allzones' or currZone
+	eZone = aZones and 'allzones' or currZoneShort
 	if zone ~= eZone then
 		zone = eZone
 	end
@@ -397,7 +430,7 @@ local function DrawEditWin(server, target, zone, desc, cmd)
 		end
 		mq.pickle(dialogData, Dialog)
 		newTarget = false
-		editGUI = false
+		Module.editGUI = false
 	end
 	ImGui.SameLine()
 	if ImGui.Button("Add Row##AddRowButton") then
@@ -437,14 +470,14 @@ local function DrawConfigWin()
 		tmpTarget = CurrTarget
 	end
 	ImGui.SetNextWindowSize(580, 350, ImGuiCond.Appearing)
-	local ColorCountConf, StyleCountConf = LoadTheme.StartTheme(theme.Theme[themeID])
-	local openC, showC = ImGui.Begin("NPC Dialog Config##Dialog_Config_" .. ME, true, ImGuiWindowFlags.NoCollapse)
+	local ColorCountConf, StyleCountConf = DrawTheme(Module.themeName)
+	local openC, showC = ImGui.Begin("NPC Dialog Config##Dialog_Config_" .. MyUI_CharLoaded, true, ImGuiWindowFlags.NoCollapse)
 	if not openC then
 		if newTarget then
-			Dialog[serverName][tmpTarget] = nil
+			Dialog[MyUI_Server][tmpTarget] = nil
 			newTarget = false
 		end
-		ConfUI = false
+		Module.ConfUI = false
 		tmpTarget = 'None'
 	end
 	if not showC then
@@ -470,8 +503,8 @@ local function DrawConfigWin()
 	end
 	ImGui.TableNextColumn()
 	if ImGui.Button("Set Group Command##DialogConfig") then
-		Config.cmdGroup = tmpGpCmd:gsub(" $", "")
-		mq.pickle(dialogConfig, Config)
+		Module.Config.cmdGroup = tmpGpCmd:gsub(" $", "")
+		mq.pickle(dialogConfig, Module.Config)
 	end
 	ImGui.TableNextRow()
 	ImGui.TableNextColumn()
@@ -481,8 +514,8 @@ local function DrawConfigWin()
 	end
 	ImGui.TableNextColumn()
 	if ImGui.Button("Set Zone Command##DialogConfig") then
-		Config.cmdZone = tmpZnCmd:gsub(" $", "")
-		mq.pickle(dialogConfig, Config)
+		Module.Config.cmdZone = tmpZnCmd:gsub(" $", "")
+		mq.pickle(dialogConfig, Module.Config)
 	end
 	ImGui.TableNextRow()
 	ImGui.TableNextColumn()
@@ -492,12 +525,12 @@ local function DrawConfigWin()
 	end
 	ImGui.TableNextColumn()
 	if ImGui.Button("Set Character Command##DialogConfig") then
-		Config.cmdChar = tmpChCmd:gsub(" $", "")
-		mq.pickle(dialogConfig, Config)
+		Module.Config.cmdChar = tmpChCmd:gsub(" $", "")
+		mq.pickle(dialogConfig, Module.Config)
 	end
 	ImGui.EndTable()
 	if ImGui.Button("Select Theme##DialogConfig") then
-		themeGUI = not themeGUI
+		Module.themeGUI = not Module.themeGUI
 	end
 	ImGui.Separator()
 	--- Dialog Config Table
@@ -514,16 +547,16 @@ local function DrawConfigWin()
 		ImGui.TableSetupColumn("##DialogDB_Config_Save", ImGuiTableColumnFlags.WidthFixed, 120)
 		ImGui.TableHeadersRow()
 		local id = 1
-		if Dialog[serverName][tmpTarget] == nil then
-			Dialog[serverName][tmpTarget] = { allzones = {}, [currZone] = {}, }
+		if Dialog[MyUI_Server][tmpTarget] == nil then
+			Dialog[MyUI_Server][tmpTarget] = { allzones = {}, [currZoneShort] = {}, }
 			newTarget = true
 		else
 			-- Use sortedKeys to sort zones and then descriptions within zones
-			local sortedZones = sortedKeys(Dialog[serverName][tmpTarget])
+			local sortedZones = sortedKeys(Dialog[MyUI_Server][tmpTarget])
 			for _, z in ipairs(sortedZones) do
-				local sortedDescriptions = sortedKeys(Dialog[serverName][tmpTarget][z])
+				local sortedDescriptions = sortedKeys(Dialog[MyUI_Server][tmpTarget][z])
 				for _, d in ipairs(sortedDescriptions) do
-					local c = Dialog[serverName][tmpTarget][z][d]
+					local c = Dialog[MyUI_Server][tmpTarget][z][d]
 					ImGui.TableNextRow()
 					ImGui.TableNextColumn()
 					ImGui.Text(tmpTarget)
@@ -541,11 +574,11 @@ local function DrawConfigWin()
 						eCmd = c
 						newCmd = c
 						newDesc = d
-						editGUI = true
+						Module.editGUI = true
 					end
 					ImGui.SameLine()
 					if ImGui.Button("Delete##DialogDB_Config_" .. id) then
-						Dialog[serverName][tmpTarget][z][d] = nil
+						Dialog[MyUI_Server][tmpTarget][z][d] = nil
 						mq.pickle(dialogData, Dialog)
 					end
 					id = id + 1
@@ -554,31 +587,31 @@ local function DrawConfigWin()
 		end
 		ImGui.EndTable()
 		if ImGui.Button("Delete NPC##DialogConfig") then
-			Dialog[serverName][tmpTarget] = nil
+			Dialog[MyUI_Server][tmpTarget] = nil
 			mq.pickle(dialogData, Dialog)
-			ConfUI = false
+			Module.ConfUI = false
 		end
 		-- ImGui.EndChild()
 	end
 	local tmpTxtAuto = autoAdd and "Disable Auto Add" or "Enable Auto Add"
 	if ImGui.Button(tmpTxtAuto .. "##DialogConfigAutoAdd") then
 		autoAdd = not autoAdd
-		Config.autoAdd = autoAdd
-		mq.pickle(dialogConfig, Config)
+		Module.Config.autoAdd = autoAdd
+		mq.pickle(dialogConfig, Module.Config)
 		setEvents()
 	end
 	ImGui.SameLine()
 	if ImGui.Button("Add Dialog##DialogConfig") then
-		if Dialog[serverName][tmpTarget] == nil then
-			Dialog[serverName][tmpTarget] = { allzones = {}, [currZone] = {}, }
+		if Dialog[MyUI_Server][tmpTarget] == nil then
+			Dialog[MyUI_Server][tmpTarget] = { allzones = {}, [currZoneShort] = {}, }
 		end
-		eZone = currZone
+		eZone = currZoneShort
 		eTar = tmpTarget
 		eDes = "NEW"
 		eCmd = "NEW"
 		newCmd = "NEW"
 		newDesc = "NEW"
-		editGUI = true
+		Module.editGUI = true
 	end
 	ImGui.SameLine()
 	if ImGui.Button("Refresh Target##DialogConf_Refresh") then
@@ -587,24 +620,24 @@ local function DrawConfigWin()
 	ImGui.SameLine()
 	if ImGui.Button("Cancel##DialogConf_Cancel") then
 		if newTarget then
-			Dialog[serverName][tmpTarget] = nil
+			Dialog[MyUI_Server][tmpTarget] = nil
 			newTarget = false
 		end
-		ConfUI = false
+		Module.ConfUI = false
 	end
 	ImGui.SameLine()
 	if ImGui.Button("Close##DialogConf_Close") then
-		ConfUI = false
+		Module.ConfUI = false
 	end
 	LoadTheme.EndTheme(ColorCountConf, StyleCountConf)
 	ImGui.End()
 end
 
 local function DrawThemeWin()
-	local ColorCountTheme, StyleCountTheme = LoadTheme.StartTheme(theme.Theme[themeID])
-	local openTheme, showTheme = ImGui.Begin('Theme Selector##DialogDB_' .. ME, true, bit32.bor(ImGuiWindowFlags.NoCollapse, ImGuiWindowFlags.AlwaysAutoResize))
+	local ColorCountTheme, StyleCountTheme = DrawTheme(Module.themeName)
+	local openTheme, showTheme = ImGui.Begin('Theme Selector##DialogDB_' .. MyUI_CharLoaded, true, bit32.bor(ImGuiWindowFlags.NoCollapse, ImGuiWindowFlags.AlwaysAutoResize))
 	if not openTheme then
-		themeGUI = false
+		Module.themeGUI = false
 	end
 	if not showTheme then
 		LoadTheme.EndTheme(ColorCountTheme, StyleCountTheme)
@@ -613,18 +646,18 @@ local function DrawThemeWin()
 	end
 	ImGui.SeparatorText("Theme##DialogDB")
 
-	ImGui.Text("Cur Theme: %s", themeName)
+	ImGui.Text("Cur Theme: %s", Module.themeName)
 	-- Combo Box Load Theme
-	if ImGui.BeginCombo("Load Theme##DialogDB", themeName) then
-		for k, data in pairs(theme.Theme) do
-			local isSelected = data.Name == themeName
+	if ImGui.BeginCombo("Load Theme##DialogDB", Module.themeName) then
+		for k, data in pairs(Module.theme.Theme) do
+			local isSelected = data.Name == Module.themeName
 			if ImGui.Selectable(data.Name, isSelected) then
-				Config.themeName = data.Name
+				Module.Config.themeName = data.Name
 				themeID = k
-				if themeName ~= Config.themeName then
-					mq.pickle(dialogConfig, Config)
+				if Module.themeName ~= Module.Config.themeName then
+					mq.pickle(dialogConfig, Module.Config)
 				end
-				themeName = Config.themeName
+				Module.themeName = Module.Config.themeName
 			end
 		end
 		ImGui.EndCombo()
@@ -639,7 +672,7 @@ end
 
 local function DrawHelpWin()
 	ImGui.SetNextWindowSize(600, 350, ImGuiCond.Appearing)
-	local openHelpWin, showHelpWin = ImGui.Begin("Help##DialogDB_" .. ME, true, bit32.bor(ImGuiWindowFlags.NoCollapse))
+	local openHelpWin, showHelpWin = ImGui.Begin("Help##DialogDB_" .. MyUI_CharLoaded, true, bit32.bor(ImGuiWindowFlags.NoCollapse))
 	if not openHelpWin then
 		showHelp = false
 	end
@@ -694,10 +727,10 @@ local function DrawHelpWin()
 end
 
 local function DrawMainWin()
-	local ColorCount, StyleCount = LoadTheme.StartTheme(theme.Theme[themeID])
-	local openMain, showMain = ImGui.Begin("NPC Dialog##DialogDB_Main_" .. ME, true, winFlags)
+	local ColorCount, StyleCount = DrawTheme(Module.themeName)
+	local openMain, showMain = ImGui.Begin("NPC Dialog##DialogDB_Main_" .. MyUI_CharLoaded, true, winFlags)
 	if not openMain then
-		ShowDialog = false
+		Module.ShowDialog = false
 	end
 	if not showMain then
 		LoadTheme.EndTheme(ColorCount, StyleCount)
@@ -710,11 +743,11 @@ local function DrawMainWin()
 		ImGui.PopID()
 		if ImGui.IsItemHovered() then
 			if ImGui.IsMouseReleased(0) then
-				ConfUI = not ConfUI
+				Module.ConfUI = not Module.ConfUI
 				tmpTarget = CurrTarget
 			end
 			if ImGui.IsMouseReleased(1) then
-				themeGUI = not themeGUI
+				Module.themeGUI = not Module.themeGUI
 			end
 		end
 		ImGui.SameLine()
@@ -744,7 +777,7 @@ local function DrawMainWin()
 				ImGui.EndCombo()
 			end
 			ImGui.SameLine()
-			local eyeCon = showCmds and Icons.FA_CARET_UP or Icons.FA_CARET_DOWN
+			local eyeCon = showCmds and MyUI_Icons.FA_CARET_UP or MyUI_Icons.FA_CARET_DOWN
 
 			if ImGui.Button(eyeCon) then showCmds = not showCmds end
 			if showCmds then
@@ -754,8 +787,9 @@ local function DrawMainWin()
 						if not DEBUG then
 							mq.cmdf("%s", _G["cmdString"])
 						else
-							printf("%s", _G["cmdString"])
+							MyUI_Utils.PrintOutput('MyUI', nil, "%s", _G["cmdString"])
 						end
+						searchString = ""
 					end
 					if mq.TLO.Me.GroupSize() > 1 then
 						ImGui.SameLine()
@@ -766,8 +800,9 @@ local function DrawMainWin()
 							if not DEBUG then
 								mq.cmdf("/multiline ; %s/target %s; /timed 5, %s%s", cmdGroup, CurrTarget, cmdGroup, _G["cmdString"])
 							else
-								printf("/multiline ; %s/target %s; /timed 5, %s%s", cmdGroup, CurrTarget, cmdGroup, _G["cmdString"])
+								MyUI_Utils.PrintOutput('MyUI', nil, "/multiline ; %s/target %s; /timed 5, %s%s", cmdGroup, CurrTarget, cmdGroup, _G["cmdString"])
 							end
+							searchString = ""
 						end
 						ImGui.SameLine()
 						local tmpDelay = delay
@@ -792,7 +827,9 @@ local function DrawMainWin()
 										if not DEBUG then
 											mq.cmdf("/multiline ; %s %s/target %s; %s %s/timed %s, %s", cmdChar, pName, CurrTarget, cmdChar, pName, cDelay, _G["cmdString"])
 										else
-											printf("/multiline ; %s %s/target %s; %s %s/timed %s, %s", cmdChar, pName, CurrTarget, cmdChar, pName, cDelay, _G["cmdString"])
+											MyUI_Utils.PrintOutput('MyUI', nil, "/multiline ; %s %s/target %s; %s %s/timed %s, %s", cmdChar, pName, CurrTarget, cmdChar, pName,
+												cDelay,
+												_G["cmdString"])
 										end
 										cDelay = cDelay + (delay * 10)
 									end
@@ -801,8 +838,9 @@ local function DrawMainWin()
 							if not DEBUG then
 								mq.cmdf("/timed %s, %s", cDelay, _G["cmdString"])
 							else
-								printf("/timed %s, %s", cDelay, _G["cmdString"])
+								MyUI_Utils.PrintOutput('MyUI', nil, "/timed %s, %s", cDelay, _G["cmdString"])
 							end
+							searchString = ""
 						end
 						ImGui.SameLine()
 						if ImGui.Button('Zone Members ##DialogDBCombined') then
@@ -812,8 +850,9 @@ local function DrawMainWin()
 							if not DEBUG then
 								mq.cmdf("/multiline ; %s/target %s; /timed 5, %s%s", cmdZone, CurrTarget, cmdZone, _G["cmdString"])
 							else
-								printf("/multiline ; %s/target %s; /timed 5, %s%s", cmdZone, CurrTarget, cmdZone, _G["cmdString"])
+								MyUI_Utils.PrintOutput('MyUI', nil, "/multiline ; %s/target %s; /timed 5, %s%s", cmdZone, CurrTarget, cmdZone, _G["cmdString"])
 							end
+							searchString = ""
 						end
 					end
 				end
@@ -824,25 +863,25 @@ local function DrawMainWin()
 	ImGui.End()
 end
 
-local function GUI_Main()
-	if currZone ~= lastZone then return end
+function Module.RenderGUI()
+	if currZoneShort ~= lastZone then return end
 	--- Dialog Main Window
-	if ShowDialog then
+	if Module.ShowDialog then
 		DrawMainWin()
 	end
 
 	--- Dialog Config Window
-	if ConfUI then
+	if Module.ConfUI then
 		DrawConfigWin()
 	end
 
 	--- Dialog Edit Window
-	if editGUI then
-		DrawEditWin(serverName, eTar, eZone, eDes, eCmd)
+	if Module.editGUI then
+		DrawEditWin(MyUI_Server, eTar, eZone, eDes, eCmd)
 	end
 
 	--- Theme Selector Window
-	if themeGUI then
+	if Module.themeGUI then
 		DrawThemeWin()
 	end
 
@@ -853,53 +892,62 @@ local function GUI_Main()
 end
 
 local function init()
-	ME = mq.TLO.Me.Name()
-	if mq.TLO.MacroQuest.BuildName() ~= 'Emu' then serverName = 'Live' end -- really only care about server name for EMU as the dialogs may vary from serever to server to server
+	if MyUI_Build ~= 'Emu' then MyUI_Server = 'Live' end -- really only care about server name for EMU as the dialogs may vary from serever to server to server
 	loadSettings()
-	printf("Dialog Data Loaded for %s", serverName)
+	MyUI_Utils.PrintOutput('MyUI', nil, "Dialog Data Loaded for %s", MyUI_Server)
 	Running = true
 	setEvents()
 	mq.bind('/dialogdb', bind)
-	currZone = mq.TLO.Zone.ShortName() or 'None'
-	lastZone = currZone
-	mq.imgui.init("Npc Dialog", GUI_Main)
-	local msgPref = string.format("\aw[\at%s\aw] ", mq.TLO.Time.Time24())
-	printf("%s\agDialog DB \aoLoaded... \at/dialogdb help \aoDisplay Help", msgPref)
+	currZoneShort = mq.TLO.Zone.ShortName() or 'None'
+	lastZone = currZoneShort
+	MyUI_Utils.PrintOutput('MyUI', nil, "%s\agDialog DB \aoLoaded... \at/dialogdb help \aoDisplay Help", msgPref)
+	Module.IsRunning = true
+	if not loadedExeternally then
+		mq.imgui.init('DialogDB', Module.RenderGUI)
+		Module.LocalLoop()
+	end
 end
 
-local function mainLoop()
-	while Running do
-		if mq.TLO.EverQuest.GameState() ~= "INGAME" then
-			print("\aw[\atDialogDB\ax] \arNot in game, \aoShutting Down...")
-			mq.exit()
-		end
-		currZone = mq.TLO.Zone.ShortName() or 'None'
-		if currZone ~= lastZone then
+local clockTimer = mq.gettime()
+function Module.MainLoop()
+	if loadedExeternally then
+		---@diagnostic disable-next-line: undefined-global
+		if not MyUI_LoadModules.CheckRunning(Module.IsRunning, Module.Name) then return end
+	end
+	local elapsedTime = mq.gettime() - clockTimer
+	if elapsedTime >= 16 then
+		currZoneShort = mq.TLO.Zone.ShortName() or 'None'
+		if currZoneShort ~= lastZone then
 			tmpDesc = ''
 			CurrTarget = 'None'
 			hasDialog = false
-			ShowDialog = false
-			ConfUI = false
-			editGUI = false
-			mq.delay(500)
-			lastZone = currZone
+			Module.ShowDialog = false
+			Module.ConfUI = false
+			Module.editGUI = false
+			lastZone = currZoneShort
+			searchString = ""
 		end
 		if checkDialog() then
-			ShowDialog = true
+			Module.ShowDialog = true
 		else
-			ShowDialog = false
+			Module.ShowDialog = false
 			if CurrTarget ~= mq.TLO.Target.DisplayName() then tmpDesc = '' end
 		end
-		mq.doevents()
-		mq.delay(16)
 	end
-	mq.exit()
+	mq.doevents()
+end
+
+function Module.LocalLoop()
+	while Module.IsRunning do
+		Module.MainLoop()
+		mq.delay(1)
+	end
 end
 
 if mq.TLO.EverQuest.GameState() ~= "INGAME" then
-	print("\aw[\atDialogDB\ax] \arNot in game, \ayTry again later...")
+	printf("\aw[\at%s\ax] \arNot in game, \ayTry again later...", script)
 	mq.exit()
 end
 
 init()
-mainLoop()
+return Module
